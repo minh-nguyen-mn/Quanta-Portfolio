@@ -1,6 +1,23 @@
 # Portfolio Optimization Framework
 
-This repository contains a quantitative trading research framework for developing and evaluating ETF-based systematic strategies. The framework focuses on signal generation, dynamic portfolio construction, ETF universe selection, and rigorous robustness testing.
+This repository contains a quantitative research framework for developing and validating systematic ETF trading strategies. The framework focuses on building robust alpha signals through a structured pipeline emphasizing cross-asset testing, independent signal validation, and conservative portfolio construction.
+
+The core philosophy is to **build many diversified long-short alpha signals first, validate them individually, and only then combine them into a portfolio**, rather than optimizing directly at the portfolio level.
+
+---
+
+# Research Philosophy
+
+The strategy is designed around several key principles:
+
+- **Signal-first research** rather than portfolio-first optimization
+- **Cross-asset robustness testing** to avoid asset-specific overfitting
+- **Independent signal validation** before aggregation
+- **Neutral long–short construction** to isolate alpha from market beta
+- **Low signal correlation** to maximize diversification
+- **Minimal reliance on leverage**
+
+This structure improves generalization and ensures that each signal contributes meaningful standalone alpha.
 
 ---
 
@@ -8,27 +25,35 @@ This repository contains a quantitative trading research framework for developin
 
 ## API Access
 
-`POLYGON_API_KEY` is required to fetch historical ETF data from Polygon.io.  
-The key should be securely stored and accessible before running the notebook.
+`POLYGON_API_KEY` is required to fetch historical ETF data from Polygon.io.
+
+The key should be securely stored before running the notebook.
+
+---
 
 ## ETF Universe
 
-`ETF_UNIVERSE` defines the set of ETFs used in the strategy.  
-The chosen universe significantly impacts performance metrics and portfolio behavior.
+`ETF_UNIVERSE` defines the set of ETFs used for signal discovery and portfolio construction.
+
+Signals are tested **across the full ETF universe first**, rather than tuned for individual assets. This prevents asset-specific overfitting and ensures signals capture broader structural effects.
+
+---
 
 ## Backtesting Periods
 
 The backtest is segmented into three periods:
 
-- **Train:** Model development and parameter tuning  
-- **Validation:** Strategy evaluation and filtering  
-- **Blind (Out-of-Sample):** Final performance test  
+- **Train:** Signal development and preliminary filtering  
+- **Validation:** Robustness confirmation and model selection  
+- **Blind (Out-of-Sample):** Final performance evaluation
 
 ```
 TRAIN_START / TRAIN_END
 VAL_START / VAL_END
 BLIND_START / BLIND_END
 ```
+
+---
 
 ## Data Sources
 
@@ -41,57 +66,50 @@ BLIND_START / BLIND_END
 - Volume
 - Returns
 
-`fetch_vix()` retrieves VIX data from FRED for regime analysis.
+`fetch_vix()` retrieves VIX data for market regime analysis.
 
-`SPY` is loaded separately to serve as:
-
-- Market benchmark
-- Market regime filter
+`SPY` is loaded separately to serve as a **market benchmark and regime reference**.
 
 ---
 
 # 2. Core Signal Operators
 
-Several custom time-series operators are used as building blocks for signals.
+Signals are built using reusable time-series operators.
 
 ## Time-Series Functions
 
 | Function | Description |
 |--------|-------------|
 | `ts_rank(x, window)` | Rank of the most recent value within a rolling window |
-| `ts_argmin(x, window)` | Index of minimum value in a rolling window |
-| `ts_mad(x, window)` | Mean Absolute Deviation |
+| `ts_argmin(x, window)` | Index of minimum value within a rolling window |
+| `ts_mad(x, window)` | Mean absolute deviation |
 | `ts_percentile(x, window, p)` | Rolling percentile |
 | `volatility(x, window)` | Rolling standard deviation |
 | `ts_mscore(x, window)` | Momentum-style score |
+
+---
 
 ## Signal Transformations
 
 | Function | Purpose |
 |--------|---------|
-| `scale_signal(x, cap)` | Caps signal leverage (e.g., ±1.5) |
-| `apply_decay(signal, decay_days, mode)` | Applies linear or exponential decay to signals |
+| `scale_signal(x, cap)` | Caps signal leverage |
+| `apply_decay(signal, decay_days, mode)` | Applies time decay to signals |
 
-These operators ensure signals remain **stable, interpretable, and point-in-time safe**.
+These transformations ensure signals remain **stable, interpretable, and point-in-time safe**.
 
 ---
 
-# 3. Signal Generation
+# 3. Signal Development Framework
 
-Signals attempt to predict future ETF returns.
-
-## Signal Registration
-
-Signals are defined using a decorator:
+Signals are defined using a modular registration system:
 
 ```python
 @register_signal
 def signal_name(df):
 ```
 
-This automatically registers signals in `_SIGNAL_REGISTRY`, allowing the backtest to dynamically apply all active signals.
-
-## Example Signal Output
+Each signal is automatically added to `_SIGNAL_REGISTRY`, allowing the research framework to test signals systematically.
 
 Signals typically output:
 
@@ -101,242 +119,204 @@ Signals typically output:
 +1  -> Long
 ```
 
-## Signal Development Workflow
+---
 
-1. **Develop a single signal**
-2. **Test it individually**
-3. Evaluate performance across:
-   - Train
-   - Validation
-   - Blind
-4. **Iteratively refine parameters**
+# 4. Cross-ETF Signal Evaluation
 
-This workflow helps reduce **overfitting risk**.
+Unlike traditional workflows that tune signals per asset, this framework evaluates signals **across the entire ETF universe first**.
+
+### Process
+
+1. Generate the signal across all ETFs.
+2. Evaluate aggregate signal behavior.
+3. Apply robustness checks across Train and Validation periods.
+
+Signals that fail robustness tests are discarded before portfolio construction.
+
+This approach significantly reduces the risk of **data-mining individual assets**.
 
 ---
 
-# 4. Signal Combination
+# 5. ETF Compatibility Filtering
 
-Multiple signals can be combined using `combine_signals()`.
+Once a signal passes aggregate validation, the ETF universe is filtered to identify **instruments that are structurally compatible with that signal**.
 
-Supported combination modes include:
+### Filtering Process
 
-| Mode | Description |
-|-----|-------------|
-| `equal` | Average of raw signals |
-| `rank` | Rank-based aggregation |
-| `zscore` | Standardized signal averaging |
-| `vol_scaled` | Inverse-volatility weighting |
-| `ic_weighted` | Weighted by rolling Information Coefficient |
+1. Evaluate profitability per ETF.
+2. Retain only ETFs with **positive risk-adjusted performance**.
+3. Iteratively remove weak instruments until the remaining set demonstrates consistent profitability.
 
-A more advanced setup allows mapping specific signals to specific ETFs for tailored strategies.
+This produces a **signal-specific ETF universe**, ensuring the signal is only applied where it behaves reliably.
 
 ---
 
-# 5. Dynamic Position Sizing
+# 6. Signal Portfolio Construction
 
-Portfolio construction is handled by:
+Each signal is constructed as its own **long–short ETF portfolio**.
 
-```
-build_long_short_portfolio()
-```
+### Portfolio Structure
 
-This function allocates capital across ETFs based on combined signals.
+- Long exposure: selected ETFs with positive signal
+- Short exposure: selected ETFs with negative signal
+- Market-neutral orientation
+- Controlled leverage
 
-## Exposure Constraints
+Each signal portfolio is required to independently demonstrate stable performance across both Train and Validation periods before inclusion.
 
-- `long_leverage` controls long exposure (e.g., 1.5)
-- `short_leverage` controls short exposure (e.g., 1.0)
-
-Positions are clipped to remain within these leverage limits.
-
-## Portfolio Weighting Modes
-
-Weights across ETFs can be assigned using:
-
-| Mode | Description |
-|-----|-------------|
-| `equal` | Equal weights |
-| `rank` | Signal rank weighting |
-| `zscore` | Standardized signals |
-| `vol_scaled` | Volatility-adjusted weights |
-| `ic_weighted` | Information coefficient weighting |
+This design ensures that **every signal component contributes real alpha**.
 
 ---
 
-# 6. ETF Filtering and Universe Selection
+# 7. Robustness Testing Pipeline
 
-The ETF universe strongly affects strategy results.
+Every signal portfolio undergoes a comprehensive validation process.
 
-## Performance Table
+## Leave-One-Out (LOO)
 
-After backtesting, a table is generated containing:
-
-- Sharpe Ratio
-- CAGR
-- Max Drawdown
-- Turnover
-- Margin usage
-
-Metrics are calculated across:
-
-- Train
-- Validation
-- Blind
-
-## ETF Filtering
-
-A filtered set of ETFs is selected using criteria such as:
-
-```
-Sharpe_Train > 0
-Sharpe_Val > 0
-AlphaSharpe_Train > 0
-AlphaSharpe_Val > 0
-```
-
-Only ETFs that satisfy these conditions form the filtered list:
-
-```
-passed_etfs
-```
-
-Researchers may replace the original ETF universe with this filtered set and rerun the backtest.
+Signals are removed one at a time to ensure the portfolio does not rely excessively on any single component.
 
 ---
-
-# 7. Impact of ETF Universe Selection
-
-Changing the ETF universe affects performance metrics for several reasons.
-
-## Portfolio Context
-
-Different ETFs contribute differently to portfolio PnL.
-
-## Cross-Sectional Ranking
-
-Signals using ranking behave differently depending on universe size.
-
-## Benchmark Changes
-
-The equally-weighted buy-and-hold benchmark changes when the ETF universe changes.
-
-As a result, the following may change dynamically:
-
-- Sharpe ratios
-- Alpha Sharpe
-- Signal rankings
-- Portfolio allocations
-
----
-
-# 8. Robustness Testing
-
-The framework includes several tests to validate strategy stability.
-
-## Train / Validation / Blind Testing
-
-A standard approach used to prevent overfitting.
-
-## Leave-One-Out (LOO) Analysis
-
-Removes one signal at a time to measure its contribution to portfolio performance.
 
 ## Signal Correlation Analysis
 
-Measures correlation between signal PnLs.
+Signal portfolio returns are analyzed for correlation.
 
-This helps detect:
+Low to moderate correlations indicate effective diversification across signals.
 
-- redundant signals
-- diversification benefits
+---
 
-## Transaction Cost Analysis
+## Transaction Cost Sensitivity
 
-Validation Sharpe is tested under different transaction cost assumptions:
+Performance is tested under multiple transaction cost assumptions to ensure profitability remains realistic.
 
-- 1 bps
-- 5 bps
-- 10 bps
-- 20 bps
+---
 
-This provides a more realistic profitability estimate.
+## Next-Day Execution Testing
 
-## Next-Day Open Execution
+Signals are evaluated using next-day open execution to simulate realistic trading conditions and eliminate lookahead bias.
 
-Performance is evaluated using next-day open prices to simulate realistic trade execution and avoid lookahead bias.
+---
 
 ## Market Regime Testing
 
-Strategy performance is tested under different market regimes:
+Performance is evaluated across different market regimes:
 
 - Bull markets
 - Bear markets
 - Sideways markets
-- High VIX environments
-- Low VIX environments
+- High volatility environments
+- Low volatility environments
 
-## Leverage Stress Test
-
-Sensitivity to leverage caps is tested, such as:
-
-```
-1.0x
-1.5x
-```
+Robust signals should remain stable across regimes rather than depending on a single market condition.
 
 ---
 
-# 9. Performance Metrics
+# 8. Portfolio Construction
 
-Key metrics tracked include:
+Once signals pass validation, they are combined into a single strategy.
+
+Current aggregation uses **equal-weighted averaging of signal portfolios**.
+
+This approach avoids introducing unnecessary parameter tuning and reduces overfitting risk.
+
+The design emphasizes:
+
+- signal independence
+- diversification
+- robustness
+
+Future weighting methods may incorporate:
+
+- volatility scaling
+- Sharpe-based weighting
+- correlation-aware allocation
+
+---
+
+# 9. Leverage Philosophy
+
+The strategy prioritizes **portable alpha rather than leverage-driven returns**.
+
+Long-short signals are designed to generate returns independently of market beta. Portfolio construction therefore focuses on stacking diversified alpha sources instead of increasing leverage.
+
+This improves stability and reduces sensitivity to market regimes.
+
+---
+
+# 10. Performance Evaluation
+
+The framework tracks several core metrics:
 
 - Sharpe Ratio
-- Alpha Sharpe
 - CAGR
-- Max Drawdown
+- Maximum Drawdown
 - Turnover
-- Margin Usage
+- Margin usage
 
-These metrics provide insight into both performance and risk.
+Performance is evaluated separately across:
+
+- Train
+- Validation
+- Blind (Out-of-Sample)
+
+Strong strategies should demonstrate **consistent behavior across all splits**.
 
 ---
 
-# 10. Equity Curve Visualization
+# 11. Equity Curve Visualization
 
 The framework generates cumulative return plots for:
 
-- Strategy equity curve
-- Equally-weighted ETF benchmark
+- individual signal portfolios
+- the combined strategy
+- benchmark comparisons
 
-This helps visualize long-term performance behavior.
+These visualizations help assess stability and drawdown behavior over time.
 
 ---
 
-# 11. Optional PnL Simulation
+# 12. Strategy Architecture Summary
 
-An optional module converts returns into dollar PnL using a specified book size.
-
-Example:
+The research pipeline follows this structure:
 
 ```
-BOOK_SIZE = $20M
+Signal Research
+      ↓
+Cross-ETF Testing
+      ↓
+Robustness Validation
+      ↓
+ETF Compatibility Filtering
+      ↓
+Signal-Level Portfolio Construction
+      ↓
+Signal Robustness Testing
+      ↓
+Equal-Weight Signal Aggregation
+      ↓
+Final Portfolio
 ```
 
-This produces a cumulative dollar profit curve.
+This layered validation process ensures that:
+
+- each signal works independently
+- the portfolio is diversified
+- overfitting is minimized
+- out-of-sample reliability is improved
 
 ---
 
 # Conclusion
 
-This framework provides a comprehensive environment for developing and evaluating quantitative ETF strategies.
+This framework provides a structured environment for developing robust ETF trading strategies.
 
-Key features include:
+Key design principles include:
 
-- Modular signal generation
-- Dynamic portfolio construction
-- ETF universe optimization
-- Robust out-of-sample testing
-- Extensive robustness diagnostics
+- cross-asset signal discovery
+- signal-level portfolio construction
+- rigorous robustness validation
+- diversified alpha stacking
+- minimal reliance on leverage
 
-By systematically combining these components, researchers can develop and validate robust systematic trading strategies.
+By validating each component independently before aggregation, the strategy aims to achieve **stable and generalizable performance across market conditions**.
