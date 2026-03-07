@@ -1,322 +1,253 @@
-# Portfolio Optimization Framework
+# ETF Long–Short Signal Portfolio
 
-This repository contains a quantitative research framework for developing and validating systematic ETF trading strategies. The framework focuses on building robust alpha signals through a structured pipeline emphasizing cross-asset testing, independent signal validation, and conservative portfolio construction.
+This project develops a systematic **multi-signal long–short ETF portfolio** designed to produce **robust, diversified alpha** across market regimes.
 
-The core philosophy is to **build many diversified long-short alpha signals first, validate them individually, and only then combine them into a portfolio**, rather than optimizing directly at the portfolio level.
+Rather than relying on a single model or leverage amplification, the strategy stacks **many independently validated signals**, each implemented as its own **long–short sub-portfolio**, and then aggregates them into a unified portfolio.
 
----
-
-# Research Philosophy
-
-The strategy is designed around several key principles:
-
-- **Signal-first research** rather than portfolio-first optimization
-- **Cross-asset robustness testing** to avoid asset-specific overfitting
-- **Independent signal validation** before aggregation
-- **Neutral long–short construction** to isolate alpha from market beta
-- **Low signal correlation** to maximize diversification
-- **Minimal reliance on leverage**
-
-This structure improves generalization and ensures that each signal contributes meaningful standalone alpha.
+The core design principle is **robust signal diversification**: each signal must be profitable on its own and remain stable across multiple validation tests before inclusion.
 
 ---
 
-# 1. Data Loading and Configuration
+# Strategy Overview
 
-## API Access
+The system builds a portfolio using **cross-sectional ETF signals** applied to a broad universe of global ETFs.
 
-`POLYGON_API_KEY` is required to fetch historical ETF data from Polygon.io.
+Key characteristics:
 
-The key should be securely stored before running the notebook.
+- Multi-signal architecture
+- Cross-asset ETF universe
+- Long–short construction
+- Equal-weight signal aggregation
+- Extensive robustness validation
 
----
-
-## ETF Universe
-
-`ETF_UNIVERSE` defines the set of ETFs used for signal discovery and portfolio construction.
-
-Signals are tested **across the full ETF universe first**, rather than tuned for individual assets. This prevents asset-specific overfitting and ensures signals capture broader structural effects.
+Each signal forms an **independent long–short sub-portfolio**, which allows failures to be isolated and reduces dependence on any single alpha source.
 
 ---
 
-## Backtesting Periods
+# ETF Universe
 
-The backtest is segmented into three periods:
+The strategy operates on a large cross-section of **~230 ETFs**, spanning:
 
-- **Train:** Signal development and preliminary filtering  
-- **Validation:** Robustness confirmation and model selection  
-- **Blind (Out-of-Sample):** Final performance evaluation
+- Global equities
+- Sector ETFs
+- Fixed income
+- Commodities
+- Volatility proxies
+- Leveraged ETFs
+- International markets
 
-```
-TRAIN_START / TRAIN_END
-VAL_START / VAL_END
-BLIND_START / BLIND_END
-```
+Examples include: SPY, QQQ, EWJ, FXI, XLV, XLP, VNQ, GLD, GDX, SOXX, TLT, HYG, AGG, IWM, EEM, EWZ, ITB, VGT, XLE, XBI
 
----
 
-## Data Sources
-
-`fetch_etf()` retrieves daily ETF data including:
-
-- Open
-- High
-- Low
-- Close
-- Volume
-- Returns
-
-`fetch_vix()` retrieves VIX data for market regime analysis.
-
-`SPY` is loaded separately to serve as a **market benchmark and regime reference**.
+This broad universe provides **diversification across asset classes and geographies**, improving signal robustness.
 
 ---
 
-# 2. Core Signal Operators
+# Portfolio Construction
 
-Signals are built using reusable time-series operators.
+The portfolio is constructed in **three layers**.
 
-## Time-Series Functions
+## 1. Signal Construction
 
-| Function | Description |
-|--------|-------------|
-| `ts_rank(x, window)` | Rank of the most recent value within a rolling window |
-| `ts_argmin(x, window)` | Index of minimum value within a rolling window |
-| `ts_mad(x, window)` | Mean absolute deviation |
-| `ts_percentile(x, window, p)` | Rolling percentile |
-| `volatility(x, window)` | Rolling standard deviation |
-| `ts_mscore(x, window)` | Momentum-style score |
+Each signal generates a **cross-sectional ranking of ETFs**.
 
----
+Signals capture different market effects such as:
 
-## Signal Transformations
+- momentum persistence
+- volatility compression
+- price path efficiency
+- volume confirmation
+- liquidity persistence
+- return dispersion
+- entropy of price movement
+- autocorrelation structure
 
-| Function | Purpose |
-|--------|---------|
-| `scale_signal(x, cap)` | Caps signal leverage |
-| `apply_decay(signal, decay_days, mode)` | Applies time decay to signals |
-
-These transformations ensure signals remain **stable, interpretable, and point-in-time safe**.
+Each signal is implemented as an **independent long–short portfolio**.
 
 ---
 
-# 3. Signal Development Framework
+## 2. Signal Validation
 
-Signals are defined using a modular registration system:
+Signals must pass strict criteria before inclusion.
 
-```python
-@register_signal
-def signal_name(df):
-```
+Requirements include:
 
-Each signal is automatically added to `_SIGNAL_REGISTRY`, allowing the research framework to test signals systematically.
+- Sharpe ≥ 1.0 in both **Train** and **Validation**
+- Consistent behavior across market regimes
+- Low correlation with existing signals
+- Robustness under transaction costs
+- Stability under leave-one-out tests
 
-Signals typically output:
-
-```
--1  -> Short
-0   -> Neutral
-+1  -> Long
-```
+Signals that fail these checks are excluded.
 
 ---
 
-# 4. Cross-ETF Signal Evaluation
+## 3. Portfolio Aggregation
 
-Unlike traditional workflows that tune signals per asset, this framework evaluates signals **across the entire ETF universe first**.
+Validated signals are combined using: Equal-weight averaging of signal portfolios
 
-### Process
+This avoids overfitting and keeps the portfolio construction simple and robust.
 
-1. Generate the signal across all ETFs.
-2. Evaluate aggregate signal behavior.
-3. Apply robustness checks across Train and Validation periods.
-
-Signals that fail robustness tests are discarded before portfolio construction.
-
-This approach significantly reduces the risk of **data-mining individual assets**.
+Each signal contributes equally to the final portfolio.
 
 ---
 
-# 5. ETF Compatibility Filtering
+# Portfolio Variants
 
-Once a signal passes aggregate validation, the ETF universe is filtered to identify **instruments that are structurally compatible with that signal**.
+Two portfolio structures are maintained.
 
-### Filtering Process
+## 1. Market Neutral Portfolio (Primary)
+Long leverage = 1.0, Short leverage = 1.0
 
-1. Evaluate profitability per ETF.
-2. Retain only ETFs with **positive risk-adjusted performance**.
-3. Iteratively remove weak instruments until the remaining set demonstrates consistent profitability.
 
-This produces a **signal-specific ETF universe**, ensuring the signal is only applied where it behaves reliably.
+This configuration produces a **balanced long–short portfolio** designed to isolate alpha rather than market exposure.
 
----
-
-# 6. Signal Portfolio Construction
-
-Each signal is constructed as its own **long–short ETF portfolio**.
-
-### Portfolio Structure
-
-- Long exposure: selected ETFs with positive signal
-- Short exposure: selected ETFs with negative signal
-- Market-neutral orientation
-- Controlled leverage
-
-Each signal portfolio is required to independently demonstrate stable performance across both Train and Validation periods before inclusion.
-
-This design ensures that **every signal component contributes real alpha**.
+This portfolio is the **primary focus of the strategy**.
 
 ---
 
-# 7. Robustness Testing Pipeline
+## 2. Long-Biased Portfolio
+Long leverage = 1.5, Short leverage = 1.0
 
-Every signal portfolio undergoes a comprehensive validation process.
 
-## Leave-One-Out (LOO)
+This variant introduces **net long exposure** while keeping the signal structure identical.
 
-Signals are removed one at a time to ensure the portfolio does not rely excessively on any single component.
-
----
-
-## Signal Correlation Analysis
-
-Signal portfolio returns are analyzed for correlation.
-
-Low to moderate correlations indicate effective diversification across signals.
+It allows additional upside during strong equity regimes.
 
 ---
 
-## Transaction Cost Sensitivity
+# Performance Summary
 
-Performance is tested under multiple transaction cost assumptions to ensure profitability remains realistic.
+## Market Neutral Portfolio (1.0 / 1.0)
 
----
+This is the **main strategy configuration**.
 
-## Next-Day Execution Testing
+| Period | Sharpe |
+|------|------|
+| Train | 3.99 |
+| Validation | 3.99 |
+| Train + Val | 3.95 |
+| Blind (Out-of-Sample) | 2.74 |
 
-Signals are evaluated using next-day open execution to simulate realistic trading conditions and eliminate lookahead bias.
+Key observations:
 
----
-
-## Market Regime Testing
-
-Performance is evaluated across different market regimes:
-
-- Bull markets
-- Bear markets
-- Sideways markets
-- High volatility environments
-- Low volatility environments
-
-Robust signals should remain stable across regimes rather than depending on a single market condition.
+- Performance remains **strong and consistent across splits**
+- Blind period confirms **good out-of-sample generalization**
+- Sharpe remains significantly higher than the benchmark
 
 ---
 
-# 8. Portfolio Construction
+# Signal Architecture
 
-Once signals pass validation, they are combined into a single strategy.
+The final portfolio contains **19 validated signals**, each running as an independent long–short sub-portfolio.
 
-Current aggregation uses **equal-weighted averaging of signal portfolios**.
+Examples include:
 
-This approach avoids introducing unnecessary parameter tuning and reduces overfitting risk.
+- signal_1
+- signal_3
+- signal_8
+- signal_9
+- signal_entropy
+- signal_autocorr
+- signal_return_conviction
+- signal_vol_of_vol
+- signal_run_length
+- signal_liquidity_persistence
+- signal_signed_volume_agreement
+- signal_price_volume_phase
+- signal_vol_compression_ratio
+- signal_convexity_gap_adjusted
+- signal_time_since_volume_spike
+- signal_path_efficiency
+- signal_return_iqr
+- signal_record_rate
+- signal_burstiness
 
-The design emphasizes:
-
-- signal independence
-- diversification
-- robustness
-
-Future weighting methods may incorporate:
-
-- volatility scaling
-- Sharpe-based weighting
-- correlation-aware allocation
-
----
-
-# 9. Leverage Philosophy
-
-The strategy prioritizes **portable alpha rather than leverage-driven returns**.
-
-Long-short signals are designed to generate returns independently of market beta. Portfolio construction therefore focuses on stacking diversified alpha sources instead of increasing leverage.
-
-This improves stability and reduces sensitivity to market regimes.
+Each signal independently satisfies the validation criteria before inclusion.
 
 ---
 
-# 10. Performance Evaluation
+# Signal Robustness
 
-The framework tracks several core metrics:
+## Individual Signal Performance
 
-- Sharpe Ratio
-- CAGR
-- Maximum Drawdown
-- Turnover
-- Margin usage
+Each signal demonstrates **independent profitability** in both training and validation sets, with most signals achieving Sharpe values around **1.0–1.4** before aggregation.
 
-Performance is evaluated separately across:
-
-- Train
-- Validation
-- Blind (Out-of-Sample)
-
-Strong strategies should demonstrate **consistent behavior across all splits**.
+This ensures that portfolio performance does **not rely on a single dominant signal**.
 
 ---
 
-# 11. Equity Curve Visualization
+## Leave-One-Out Stability
 
-The framework generates cumulative return plots for:
+A leave-one-out analysis was performed by removing each signal individually and recomputing portfolio performance.
 
-- individual signal portfolios
-- the combined strategy
-- benchmark comparisons
+Results show that:
 
-These visualizations help assess stability and drawdown behavior over time.
+- performance remains stable
+- no signal removal collapses returns
+- the portfolio is **not dependent on any single signal**
+
+This confirms **true diversification of alpha sources**.
 
 ---
 
-# 12. Strategy Architecture Summary
+## Signal Correlation
 
-The research pipeline follows this structure:
+Signal correlations are generally **low to moderate**, with most pairwise correlations remaining well below **0.3**.
 
-```
-Signal Research
-      ↓
-Cross-ETF Testing
-      ↓
-Robustness Validation
-      ↓
-ETF Compatibility Filtering
-      ↓
-Signal-Level Portfolio Construction
-      ↓
-Signal Robustness Testing
-      ↓
-Equal-Weight Signal Aggregation
-      ↓
-Final Portfolio
-```
+Low correlation between signals ensures that:
 
-This layered validation process ensures that:
+- signals capture different market effects
+- portfolio diversification is effective
+- risk concentration is minimized
 
-- each signal works independently
-- the portfolio is diversified
-- overfitting is minimized
-- out-of-sample reliability is improved
+---
+
+# Execution Assumptions
+
+The strategy assumes **next-day execution**, meaning signals are computed using today's close and positions are executed at the next market open.
+
+This avoids look-ahead bias and ensures realistic tradability.
+
+Transaction costs are included in robustness testing.
+
+---
+
+# Key Characteristics
+
+The strategy exhibits several desirable properties:
+
+- diversified alpha sources
+- strong out-of-sample performance
+- low signal correlation
+- robustness to signal removal
+- large ETF universe
+- consistent behavior across market regimes
+
+Most importantly, the results indicate that performance arises from **stacking many independent long–short signals**, rather than relying on leverage or a single predictive model.
+
+---
+
+# Future Improvements
+
+Potential improvements include:
+
+- turnover reduction via signal smoothing
+- volatility-based signal weighting
+- correlation-aware portfolio weighting
+- dynamic capital allocation across signals
+- expansion of orthogonal signal families
 
 ---
 
 # Conclusion
 
-This framework provides a structured environment for developing robust ETF trading strategies.
+This project demonstrates that a **multi-signal long–short ETF portfolio** can generate strong and robust risk-adjusted returns when built with strict validation and diversification principles.
 
-Key design principles include:
+The results suggest that:
 
-- cross-asset signal discovery
-- signal-level portfolio construction
-- rigorous robustness validation
-- diversified alpha stacking
-- minimal reliance on leverage
+- diversified signal stacking is a powerful source of alpha
+- independent signal validation improves out-of-sample reliability
+- broad ETF universes enable robust cross-sectional strategies
 
-By validating each component independently before aggregation, the strategy aims to achieve **stable and generalizable performance across market conditions**.
+The market-neutral configuration shows particularly strong stability and remains the primary focus of the strategy.
