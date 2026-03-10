@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""
+Create refactored Portfolio_1_0xLong_REFACTORED.ipynb
+Using modularized signals.py and portfolio_engine.py
+"""
+
+import json
+
+notebook = {
+    "cells": [
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "# Portfolio 1.0x Long — REFACTORED\n",
+                "Using modularized `signals.py` and `portfolio_engine.py`\n",
+                "\n",
+                "This notebook replaces 5227 lines of monolithic code with ~150 lines of modular imports and execution."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "import os\n",
+                "import numpy as np\n",
+                "import pandas as pd\n",
+                "import matplotlib.pyplot as plt\n",
+                "import warnings\n",
+                "warnings.filterwarnings('ignore')\n",
+                "\n",
+                "# Import modularized components\n",
+                "from signals import _SIGNAL_REGISTRY, _SIGNAL_REGISTRY  # signal functions\n",
+                "from portfolio_engine import (\n",
+                "    load_price_data,\n",
+                "    run_period,\n",
+                "    sharpe,\n",
+                "    cagr,\n",
+                "    max_drawdown,\n",
+                "    perf_stats,\n",
+                "    portfolio_row\n",
+                ")\n",
+                "\n",
+                "print('✓ All modules imported successfully')"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Configuration"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# API Configuration\n",
+                "POLYGON_API_KEY = 'REMOVED_API_KEY'  # ⚠️ Move to environment variable\n",
+                "\n",
+                "# Period Configuration\n",
+                "TRAIN_START = '2000-01-01'\n",
+                "TRAIN_END = '2015-12-31'\n",
+                "VAL_START = '2016-01-01'\n",
+                "VAL_END = '2021-12-31'\n",
+                "BLIND_START = '2022-01-01'\n",
+                "BLIND_END = '2025-06-30'\n",
+                "\n",
+                "# Portfolio Configuration\n",
+                "PORTFOLIO_NAME = '1.0x Long'\n",
+                "LONG_LEVERAGE = 1.0\n",
+                "SHORT_LEVERAGE = 1.0\n",
+                "\n",
+                "# ETF Universe from original configuration\n",
+                "ETF_UNIVERSE = [\n",
+                "    'AAXJ', 'ACWI', 'ACWX', 'AGG', 'AGQ', 'AIA', 'AOA', 'AOM', 'AOR', 'BAB',\n",
+                "    'BIL', 'BIV', 'BLV', 'BND', 'BSV', 'BWX', 'CGW', 'CMF', 'CQQQ', 'CWB',\n",
+                "    'CWI', 'DBC', 'DEM', 'DES', 'DGS', 'DHS', 'DIA', 'DLN', 'DLS', 'DON',\n",
+                "    'EDV', 'EEM', 'EFA', 'EFV', 'EFG', 'EPI', 'EPS', 'EWA', 'EWC', 'EWG',\n",
+                "    'EWJ', 'EWL', 'EWP', 'EWS', 'EWT', 'EWU', 'EWW', 'EWY', 'EWZ', 'EXI',\n",
+                "    'EZU', 'FAS', 'FBT', 'FDL', 'FDN', 'FEX', 'FIW', 'FTA', 'FTC', 'FVD',\n",
+                "    'FXH', 'FXI', 'FXL', 'FXO', 'FXR', 'FXU', 'FYX', 'GDX', 'GDXJ', 'GLD',\n",
+                "    'GRID', 'GOVI', 'GSG', 'GSY', 'GVI', 'HYD', 'HYG', 'IAI', 'IAU', 'IBB',\n",
+                "    'ICF', 'ICLN', 'IDU', 'IDV', 'IEF', 'IEI', 'IEV', 'IGF', 'IGM', 'IGV',\n",
+                "    'IHI', 'IJH', 'IJJ', 'IJR', 'IJT', 'IJS', 'IWB', 'IWC', 'IWD', 'IWF',\n",
+                "    'IWL', 'IWM', 'IWN', 'IWO', 'IWP', 'IWR', 'IWS', 'IWV', 'IWX', 'IWY',\n",
+                "    'IXC', 'IXJ', 'IXN', 'IYC', 'IYE', 'IYF', 'IYG', 'IYH', 'IYJ', 'IYK',\n",
+                "    'IYR', 'IYW', 'IYY', 'JNK', 'KBE', 'KRE', 'LQD', 'MDBX', 'MDY', 'MDYG',\n",
+                "    'MDYV', 'MGC', 'MGK', 'MGV', 'MINT', 'MLPS', 'MUB', 'MUNI', 'NYF', 'OEF',\n",
+                "    'ONEQ', 'PCY', 'PDP', 'PEY', 'PFF', 'PGX', 'PHO', 'PID', 'PKW', 'PRF',\n",
+                "    'PRFZ', 'PWB', 'PWV', 'PWZ', 'PXF', 'PXH', 'PZA', 'QQEW', 'QQQ', 'QLD',\n",
+                "    'QTEC', 'ROM', 'RPG', 'RPV', 'RSP', 'RWJ', 'RWK', 'RWL', 'RWO', 'RWR',\n",
+                "    'SCZ', 'SDY', 'SH', 'SHM', 'SHV', 'SHY', 'SIVR', 'SLV', 'SMH', 'SOXX',\n",
+                "    'SPAB', 'SPIB', 'SPIP', 'SPLB', 'SPMB', 'SPSB', 'SPTI', 'SPTL', 'SPMD',\n",
+                "    'SPYG', 'SPYV', 'SCHA', 'SCHB', 'SCHF', 'SCHG', 'SCHV', 'SCHX', 'SLYG',\n",
+                "    'SLYV', 'SPHQ', 'SPXL', 'SUB', 'TBF', 'TECL', 'TFI', 'TIP', 'TLH', 'TLT',\n",
+                "    'TMF', 'TNA', 'UPRO', 'USB', 'USIG', 'USO', 'VAW', 'VB', 'VBK', 'VBR',\n",
+                "    'VCR', 'VCSH', 'VCIT', 'VCLT', 'VDE', 'VDC', 'VEA', 'VEU', 'VFH', 'VGK',\n",
+                "    'VGIT', 'VGLT', 'VGSH', 'VHT', 'VIG', 'VIS', 'VNQ', 'VOE', 'VOT', 'VOX',\n",
+                "    'VPL', 'VPU', 'VTI', 'VTV', 'VUG', 'VV', 'VWO', 'VYM', 'XBI', 'XLE',\n",
+                "    'XLF', 'XLG', 'XLI', 'XLK', 'XLP', 'XLU', 'XLV', 'XLY', 'XME', 'XOP',\n",
+                "    'XSD', 'YINN', 'ZROZ'\n",
+                "]\n",
+                "\n",
+                "print(f'Portfolio: {PORTFOLIO_NAME}')\n",
+                "print(f'Period: {TRAIN_START} to {BLIND_END}')\n",
+                "print(f'ETF Universe: {len(ETF_UNIVERSE)} tickers')"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Load Data & Run Backtest"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# Load price data (with caching)\n",
+                "price_data = load_price_data(ETF_UNIVERSE, POLYGON_API_KEY)\n",
+                "\n",
+                "# Verify SPY loaded (required)\n",
+                "assert 'SPY' in price_data, 'SPY must be in price data'\n",
+                "print(f\"✓ Loaded {len(price_data)} ETFs\")"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# Run complete backtest (full period: train + val + blind)\n",
+                "pnl_full, pos_full, ret_full, ind_pnl_full = run_period(\n",
+                "    TRAIN_START,\n",
+                "    BLIND_END,\n",
+                "    price_data,\n",
+                "    _SIGNAL_REGISTRY,\n",
+                "    long_leverage=LONG_LEVERAGE,\n",
+                "    short_leverage=SHORT_LEVERAGE\n",
+                ")\n",
+                "\n",
+                "print('✓ Backtest complete')\n",
+                "print(f'  Portfolio Length: {len(pnl_full)} days')\n",
+                "print(f'  Active ETFs: {len(ret_full.columns)}')"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Calculate Metrics"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# Slice periods from full series\n",
+                "train_pnl = pnl_full.loc[TRAIN_START:TRAIN_END]\n",
+                "val_pnl = pnl_full.loc[VAL_START:VAL_END]\n",
+                "blind_pnl = pnl_full.loc[BLIND_START:BLIND_END]\n",
+                "train_val_pnl = pnl_full.loc[TRAIN_START:VAL_END]\n",
+                "\n",
+                "# Calculate Sharpe ratios\n",
+                "train_sharpe = sharpe(train_pnl)\n",
+                "val_sharpe = sharpe(val_pnl)\n",
+                "blind_sharpe = sharpe(blind_pnl)\n",
+                "train_val_sharpe = sharpe(train_val_pnl)\n",
+                "\n",
+                "print('\\n=== PERFORMANCE METRICS ===')\n",
+                "print(f'TRAIN+VAL SHARPE: {train_val_sharpe:.10f}')\n",
+                "print(f'TRAIN SHARPE:     {train_sharpe:.10f}')\n",
+                "print(f'VAL SHARPE:       {val_sharpe:.10f}')\n",
+                "print(f'BLIND SHARPE:     {blind_sharpe:.10f}')"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Equity Curve Visualization"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# Create equity curve\n",
+                "portfolio = (1 + pnl_full).cumprod()\n",
+                "\n",
+                "# Plot\n",
+                "plt.figure(figsize=(15, 6))\n",
+                "plt.plot(portfolio.index, portfolio.values, linewidth=2, label=PORTFOLIO_NAME)\n",
+                "\n",
+                "# Add period shading\n",
+                "plt.axvspan(pd.to_datetime(TRAIN_START), pd.to_datetime(TRAIN_END),\n",
+                "            color='green', alpha=0.08, label='Train')\n",
+                "plt.axvspan(pd.to_datetime(VAL_START), pd.to_datetime(VAL_END),\n",
+                "            color='blue', alpha=0.08, label='Validation')\n",
+                "plt.axvspan(pd.to_datetime(BLIND_START), pd.to_datetime(BLIND_END),\n",
+                "            color='red', alpha=0.08, label='Blind')\n",
+                "\n",
+                "plt.legend()\n",
+                "plt.title('Portfolio Equity Curve — Train / Validation / Blind')\n",
+                "plt.ylabel('Cumulative Return')\n",
+                "plt.grid(alpha=0.3)\n",
+                "plt.tight_layout()\n",
+                "plt.show()"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Performance Statistics"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# Slice position and return data for each period\n",
+                "train_pos = pos_full.loc[TRAIN_START:TRAIN_END]\n",
+                "val_pos = pos_full.loc[VAL_START:VAL_END]\n",
+                "blind_pos = pos_full.loc[BLIND_START:BLIND_END]\n",
+                "\n",
+                "train_ind_pnl = ind_pnl_full.loc[TRAIN_START:TRAIN_END]\n",
+                "val_ind_pnl = ind_pnl_full.loc[VAL_START:VAL_END]\n",
+                "blind_ind_pnl = ind_pnl_full.loc[BLIND_START:BLIND_END]\n",
+                "\n",
+                "# Compute per-ETF statistics\n",
+                "train_stats = perf_stats(train_ind_pnl, train_pos, price_data)\n",
+                "val_stats = perf_stats(val_ind_pnl, val_pos, price_data)\n",
+                "blind_stats = perf_stats(blind_ind_pnl, blind_pos, price_data)\n",
+                "\n",
+                "# Combine into single table\n",
+                "perf_table = (\n",
+                "    train_stats.add_suffix('_Train')\n",
+                "    .join(val_stats.add_suffix('_Val'))\n",
+                "    .join(blind_stats.add_suffix('_Blind'))\n",
+                ")\n",
+                "\n",
+                "# Portfolio row\n",
+                "portfolio_perf = pd.concat([\n",
+                "    portfolio_row(train_pnl, train_pos, price_data, TRAIN_START, TRAIN_END).add_suffix('_Train'),\n",
+                "    portfolio_row(val_pnl, val_pos, price_data, VAL_START, VAL_END).add_suffix('_Val'),\n",
+                "    portfolio_row(blind_pnl, blind_pos, price_data, BLIND_START, BLIND_END).add_suffix('_Blind')\n",
+                "])\n",
+                "perf_table.loc['PORTFOLIO'] = portfolio_perf\n",
+                "\n",
+                "print('\\nTOP 10 ETFs BY TRAIN SHARPE')\n",
+                "print(perf_table.sort_values('Sharpe_Train', ascending=False).head(10))"
+            ]
+        }
+    ],
+    "metadata": {
+        "kernelspec": {
+            "display_name": "Python 3",
+            "language": "python",
+            "name": "python3"
+        },
+        "language_info": {
+            "name": "python",
+            "version": "3.9.0"
+        }
+    },
+    "nbformat": 4,
+    "nbformat_minor": 4
+}
+
+# Write notebook
+with open('Portfolio_1_0xLong_REFACTORED.ipynb', 'w') as f:
+    json.dump(notebook, f, indent=2)
+
+print("✓ Created Portfolio_1_0xLong_REFACTORED.ipynb")
