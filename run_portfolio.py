@@ -29,7 +29,7 @@ BLIND_END = '2025-06-30'
 from datetime import datetime
 
 LIVE_START = "2026-01-01"
-LIVE_END = "2026-03-01"
+LIVE_END = datetime.today().strftime("%Y-%m-%d")
 
 # Portfolio 1.0x Long: 19 signals, 230 ETFs
 SIGNAL_MAP_1_0X_STRINGS = {
