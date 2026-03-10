@@ -1,271 +1,167 @@
-# ETF Long–Short Signal Portfolio
+# Quanta Portfolio
 
-This project implements a **systematic multi-signal long–short ETF portfolio** designed to generate **robust and diversified alpha across market regimes**.
+Systematic ETF portfolio backtesting framework with modular signals, ETF universe management, and cached data loading.
 
-Rather than relying on a single predictive model, the system stacks **many independently validated signals**, each implemented as its own **long–short sub-portfolio**, and aggregates them into a unified portfolio.
-
-The core philosophy is **signal diversification**:
-
-- every signal must work independently  
-- signals must generalize across datasets  
-- signals must remain stable when combined  
-
-This avoids dependence on any single alpha source and produces a **robust systematic portfolio**.
+The system supports running multiple portfolios individually or in combination while sharing the same data pipeline and cache.
 
 ---
 
-# Strategy Overview
+# Features
 
-The portfolio is constructed using **cross-sectional ETF signals** applied to a broad universe of global ETFs.
-
-Key properties:
-
-- Multi-signal architecture  
-- Cross-asset ETF universe  
-- Long–short construction  
-- Equal-weight signal aggregation  
-- Extensive out-of-sample validation  
-
-Each signal produces its own **long–short portfolio**, which is then aggregated into the final strategy.
+- Modular signal architecture
+- ETF universe abstraction
+- Local data caching (avoids repeated downloads)
+- Train / Validation / Blind / Live evaluation splits
+- Portfolio-level and combined portfolio backtests
+- PnL correlation matrices
+- Configurable leverage
+- Reproducible CLI execution
 
 ---
 
-# ETF Universe
+# Portfolio Structure
 
-The system operates on a **large cross-section of 232 ETFs**, spanning multiple asset classes:
+The framework currently supports three portfolio modes:
 
-- global equities  
-- sector ETFs  
-- fixed income  
-- commodities  
-- volatility proxies  
-- leveraged ETFs  
-- international markets  
+| Mode | Description |
+|-----|-------------|
+| `1.0` | Base portfolio |
+| `1.5` | Higher leverage portfolio |
+| `combo` | Equal-weight combination of 1.0 and 1.5 portfolios |
 
-Example ETFs include:
+Each portfolio has its own:
 
-SPY, QQQ, EWJ, FXI, XLV, XLP, VNQ, GLD, GDX, SOXX, TLT, HYG, AGG, IWM, EEM, EWZ, ITB, VGT, XLE, XBI
-
-A large ETF universe improves:
-
-- cross-sectional signal power  
-- diversification  
-- robustness across regimes  
+- signal set
+- ETF universe
+- leverage configuration
 
 ---
 
-# Code Architecture
+# Data Periods
 
-The project is structured into modular components.
+The backtest uses the following dataset splits:
+
+| Period | Date Range | Purpose |
+|------|-------------|--------|
+| Train | 2000-01-01 → 2015-12-31 | Model development |
+| Validation | 2016-01-01 → 2021-12-31 | Out-of-sample testing |
+| Blind | 2022-01-01 → 2025-06-30 | Unseen historical data |
+| Live | 2026-01-01 → present | Real forward period |
+
+**Important**
+
+The live period shown in examples currently uses **only the first two months of 2026**.
 
 ```
-Quanta-Portfolio/
-
-run_portfolio.py
-portfolio_engine.py
-signals/
-    __init__.py
-    signal_*.py
-data_cache/
-README.md
+LIVE OUT-OF-SAMPLE
+2026-01-01 → 2026-03-01
 ```
 
-## run_portfolio.py
-
-Main entry point for the system.
-
-Responsibilities:
-
-- CLI interface  
-- portfolio configuration  
-- ETF universe construction  
-- data loading  
-- running portfolio backtests  
-- computing performance metrics  
-- printing results  
+This window will automatically extend as new data becomes available.
 
 ---
 
-## portfolio_engine.py
+# Installation
 
-Core backtesting engine.
-
-Handles:
-
-- signal evaluation  
-- long/short portfolio construction  
-- leverage control  
-- daily PnL computation  
-- Sharpe / CAGR / drawdown metrics  
-
----
-
-## signals/
-
-Contains **all signal implementations**.
-
-Signals are registered through:
-
-```python
-_SIGNAL_REGISTRY
-```
-
-This allows the portfolio to dynamically map **signal names → signal functions**.
-
----
-
-# Portfolio Configurations
-
-Two portfolio structures are implemented.
-
----
-
-## 1. Market Neutral Portfolio (1.0x)
-
-Long leverage = **1.0**  
-Short leverage = **1.0**
-
-Configuration:
-
-- **19 signals**
-- **230 ETFs**
-
-Goal:
-
-Capture **pure alpha** with minimal market exposure.
-
----
-
-## 2. Long-Biased Portfolio (1.5x)
-
-Long leverage = **1.5**  
-Short leverage = **1.0**
-
-Configuration:
-
-- **11 signals**
-- **142 ETFs**
-
-Goal:
-
-Combine signal alpha with **equity risk premium**.
-
----
-
-## 3. Combined Portfolio
-
-The combined strategy equally weights both portfolios.
+Clone the repository:
 
 ```
-Combined = 0.5 × (1.0x portfolio)
-         + 0.5 × (1.5x portfolio)
+git clone https://github.com/minh-nguyen-mn/Quanta-Portfolio.git
+cd Quanta-Portfolio
 ```
 
-Configuration:
-
-- **30 signals**
-- **232 ETFs**
-
-This increases diversification and improves robustness.
-
 ---
 
-# Dataset Splits
+# Running the Backtest
 
-Performance is evaluated across multiple datasets.
+## Run 1.0 Portfolio
 
-| Period | Range |
-|------|------|
-| Train | 2000-01-01 → 2015-12-31 |
-| Validation | 2016-01-01 → 2021-12-31 |
-| Blind | 2022-01-01 → 2025-06-30 |
-| Live OOS | 2026-01-01 → present |
-
-The **Live OOS period updates automatically** whenever the portfolio is run.
-
----
-
-# Running the Portfolio
-
-The portfolio is executed from the command line.
-
-## Run Market Neutral Portfolio
-
-```bash
+```
 python run_portfolio.py 1.0
 ```
 
-Runs:
+## Run 1.5 Portfolio
 
-- 19 signals  
-- 230 ETFs  
-- 1.0 / 1.0 leverage  
-
----
-
-## Run Long-Biased Portfolio
-
-```bash
+```
 python run_portfolio.py 1.5
 ```
 
-Runs:
-
-- 11 signals  
-- 142 ETFs  
-- 1.5 / 1.0 leverage  
-
----
-
 ## Run Combined Portfolio
 
-```bash
+```
 python run_portfolio.py combo
 ```
 
-Runs:
+This runs:
 
-1. Market neutral portfolio  
-2. Long-biased portfolio  
-3. Combined portfolio  
-
----
-
-## Force Reload ETF Data
-
-ETF data is cached locally.
-
-To force a full reload:
-
-```bash
-python run_portfolio.py combo --reload
-```
+- Portfolio 1.0
+- Portfolio 1.5
+- Equal-weight combination
 
 ---
 
-# ETF Data Caching
+# Data Cache
 
 ETF price data is cached locally to avoid repeated downloads.
 
-Example console output:
+Cached files are stored in:
 
 ```
-Loading ETF universe (232 ETFs) ...
-
-Loading ETF data...
-
-✓ Cache hits   (232): ['AAXJ', 'ACWX', 'AGG', 'AGQ', 'AIA']...
+data_cache/
 ```
 
-This means all ETF price data was loaded from cache instead of downloading again.
+When the program runs:
+
+```
+✓ Cache hits   (232)
+↓ Fetched new (...)
+```
+
+### Force Reload Cache
+
+```
+python run_portfolio.py combo --clear-cache
+```
+
+This deletes cached files and downloads fresh data.
 
 ---
 
-# Example Console Output
+# Performance Metrics
+
+The framework reports:
+
+| Metric | Meaning |
+|------|--------|
+| Sharpe Ratio | Risk-adjusted return |
+| CAGR | Compound annual growth rate |
+| Max Drawdown | Largest peak-to-trough loss |
+| Absolute Return | Return during live period |
+| Final Equity | Ending equity multiple |
+
+Example:
 
 ```
-PS D:\Quanta-Portfolio> python run_portfolio.py combo
+Absolute Return: 0.0521
+Final Equity:    1.0521
 ```
+
+Meaning:
+
+- Portfolio gained **5.21%**
+- $1 → **$1.0521**
+
+---
+
+# Example Output
+
+Example command:
+
+```
+python run_portfolio.py combo
+```
+
+Example output:
 
 ```
 ======================================================================
@@ -279,190 +175,153 @@ Loading ETF data...
 ✓ Cache hits   (232): ['AAXJ', 'ACWX', 'AGG', 'AGQ', 'AIA']...
 
 Running combined portfolio (1.0x + 1.5x equal weight)
+
+
+======================================================================
+PORTFOLIO 1.0x
+======================================================================
+Configuration: 19 signals, 230 ETFs
+======================================================================
+
+RESULTS
+
+TRAIN PERIOD                   (2000-01-01 to 2015-12-31)
+  Sharpe Ratio:         3.9893
+  CAGR:                 0.1536
+  Max Drawdown:        -0.0178
+
+VALIDATION PERIOD              (2016-01-01 to 2021-12-31)
+  Sharpe Ratio:         3.9960
+  CAGR:                 0.1062
+  Max Drawdown:        -0.0119
+
+BLIND PERIOD                   (2022-01-01 to 2025-06-30)
+  Sharpe Ratio:         2.7426
+  CAGR:                 0.0631
+  Max Drawdown:        -0.0147
+
+LIVE OUT-OF-SAMPLE             (2026-01-01 to 2026-03-01)
+  Sharpe Ratio:         1.9878
+  CAGR:                 0.0412
+  Max Drawdown:        -0.0047
+
+TRAIN + VALIDATION
+  Sharpe Ratio:         3.9420
+
+FULL PERIOD
+  Sharpe Ratio:         3.6935
+
+LIVE RETURN
+  Absolute Return:       0.0063
+  Final Equity:          1.0063
+
+SUMMARY
+  Signals Used:    19
+  ETFs Used:       230
+  Total Return:         12.1673
+  Final Drawdown:       -0.0133
+
+
+======================================================================
+PORTFOLIO 1.5x
+======================================================================
+Configuration: 11 signals, 142 ETFs
+======================================================================
+
+RESULTS
+
+TRAIN PERIOD                   (2000-01-01 to 2015-12-31)
+  Sharpe Ratio:         3.1921
+  CAGR:                 0.2283
+  Max Drawdown:        -0.0608
+
+VALIDATION PERIOD              (2016-01-01 to 2021-12-31)
+  Sharpe Ratio:         2.9778
+  CAGR:                 0.1805
+  Max Drawdown:        -0.0782
+
+BLIND PERIOD                   (2022-01-01 to 2025-06-30)
+  Sharpe Ratio:         2.0495
+  CAGR:                 0.1272
+  Max Drawdown:        -0.0769
+
+LIVE OUT-OF-SAMPLE             (2026-01-01 to 2026-03-01)
+  Sharpe Ratio:         4.0842
+  CAGR:                 0.3886
+  Max Drawdown:        -0.0222
+
+TRAIN + VALIDATION
+  Sharpe Ratio:         3.1214
+
+FULL PERIOD
+  Sharpe Ratio:         2.9360
+
+LIVE RETURN
+  Absolute Return:       0.0521
+  Final Equity:          1.0521
+
+SUMMARY
+  Signals Used:    11
+  ETFs Used:       142
+  Total Return:         55.0097
+  Final Drawdown:        0.0000
+
+
+======================================================================
+COMBINED PORTFOLIO (1.0x + 1.5x)
+======================================================================
+Configuration: 30 signals, 232 ETFs
+======================================================================
+
+RESULTS
+
+TRAIN PERIOD                   (2000-01-01 to 2015-12-31)
+  Sharpe Ratio:         3.8851
+  CAGR:                 0.1908
+  Max Drawdown:        -0.0271
+
+VALIDATION PERIOD              (2016-01-01 to 2021-12-31)
+  Sharpe Ratio:         3.8417
+  CAGR:                 0.1431
+  Max Drawdown:        -0.0352
+
+BLIND PERIOD                   (2022-01-01 to 2025-06-30)
+  Sharpe Ratio:         2.5383
+  CAGR:                 0.0951
+  Max Drawdown:        -0.0437
+
+LIVE OUT-OF-SAMPLE             (2026-01-01 to 2026-03-01)
+  Sharpe Ratio:         3.9650
+  CAGR:                 0.2032
+  Max Drawdown:        -0.0120
+
+TRAIN + VALIDATION
+  Sharpe Ratio:         3.8466
+
+FULL PERIOD
+  Sharpe Ratio:         3.6083
+
+LIVE RETURN
+  Absolute Return:       0.0290
+  Final Equity:          1.0290
+
+SUMMARY
+  Signals Used:    30
+  ETFs Used:       232
+  Total Return:         26.3733
+  Final Drawdown:       -0.0001
 ```
 
 ---
 
-# Example Results (Early Live Period Illustration)
+# Notes
 
-The live out-of-sample period begins in **2026**.
-
-The results shown below are **only an early illustration using the first ~2 months of live data** and should **not be interpreted as long-term live performance**.
-
-As time progresses, the live statistics will automatically update when the portfolio is re-run.
-
-Example evaluation window:
-
-```
-2026-01-01 → 2026-03-01
-```
-
-Because this sample period is short, live Sharpe ratios and returns may fluctuate significantly.
+- PnL values represent **daily portfolio returns**.
+- Total return is the **equity multiple minus 1** over the full backtest period.
+- Live performance will evolve as more real data becomes available.
 
 ---
 
-# Market Neutral Portfolio (1.0x)
+# License
 
-Configuration:
-
-- 19 signals  
-- 230 ETFs  
-
-| Period | Sharpe |
-|------|------|
-| Train | 3.99 |
-| Validation | 4.00 |
-| Blind | 2.74 |
-| Live (early sample) | 1.99 |
-| Full | 3.69 |
-
-Example early live performance:
-
-```
-Absolute Return: 0.63%
-Final Equity:    1.0063
-```
-
----
-
-# Long-Biased Portfolio (1.5x)
-
-Configuration:
-
-- 11 signals  
-- 142 ETFs  
-
-| Period | Sharpe |
-|------|------|
-| Train | 3.19 |
-| Validation | 2.98 |
-| Blind | 2.05 |
-| Live (early sample) | 4.08 |
-| Full | 2.94 |
-
-Example early live performance:
-
-```
-Absolute Return: 5.21%
-Final Equity:    1.0521
-```
-
----
-
-# Combined Portfolio
-
-Configuration:
-
-- 30 signals  
-- 232 ETFs  
-
-| Period | Sharpe |
-|------|------|
-| Train | 3.89 |
-| Validation | 3.84 |
-| Blind | 2.54 |
-| Live (early sample) | 3.97 |
-| Full | 3.61 |
-
-Example early live performance:
-
-```
-Absolute Return: 2.90%
-Final Equity:    1.0290
-```
-
----
-
-# Important Note
-
-The **live out-of-sample period started in 2026**, so current results only reflect **a very short observation window**.
-
-These numbers are included purely as an **example of how the system reports live performance**, and will evolve as additional data accumulates.
-
-Longer live evaluation periods are necessary before drawing meaningful conclusions about real-world performance.
-
----
-
-# Signal Architecture
-
-Signals capture diverse market effects including:
-
-- entropy of price movement  
-- volatility compression  
-- autocorrelation structure  
-- liquidity persistence  
-- price-volume interaction  
-- record rates  
-- burstiness  
-- path efficiency  
-
-Example signals:
-
-```
-signal_entropy
-signal_autocorr
-signal_burstiness
-signal_record_rate
-signal_vol_compression_ratio
-signal_return_conviction
-signal_price_volume_phase
-signal_liquidity_persistence
-signal_run_length
-signal_signed_volume_agreement
-```
-
-Each signal is validated individually before inclusion.
-
----
-
-# Signal Validation
-
-Signals must pass strict criteria:
-
-- Sharpe ≥ **1.0** in Train and Validation  
-- consistent performance across regimes  
-- low correlation with existing signals  
-- stability under leave-one-out testing  
-- robustness under transaction costs  
-
-Signals failing these tests are excluded.
-
----
-
-# Execution Assumptions
-
-Signals use **next-day execution**.
-
-Process:
-
-1. Signals computed using today's close  
-2. Positions entered at next market open  
-
-This avoids **look-ahead bias** and reflects realistic trading.
-
----
-
-# Key Characteristics
-
-The strategy exhibits:
-
-- diversified alpha sources  
-- strong out-of-sample performance  
-- low signal correlation  
-- large ETF cross-section  
-- stability across market regimes  
-
-Performance arises from **stacking many independent signals**, not from leverage or a single predictive model.
-
----
-
-# Conclusion
-
-This project demonstrates that **multi-signal long–short ETF portfolios** can generate strong and robust risk-adjusted returns when constructed with:
-
-- strict signal validation  
-- large ETF universes  
-- diversified alpha sources  
-- disciplined out-of-sample testing  
-
-The **combined portfolio** shows particularly strong stability, delivering high Sharpe ratios historically and providing a framework for ongoing **live out-of-sample evaluation**.
+MIT License
