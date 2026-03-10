@@ -1,315 +1,468 @@
 # ETF Long–Short Signal Portfolio
 
-This project develops a systematic **multi-signal long–short ETF portfolio** designed to produce **robust, diversified alpha** across market regimes.
+This project implements a **systematic multi-signal long–short ETF portfolio** designed to generate **robust and diversified alpha across market regimes**.
 
-Rather than relying on a single model or leverage amplification, the strategy stacks **many independently validated signals**, each implemented as its own **long–short sub-portfolio**, and then aggregates them into a unified portfolio.
+Rather than relying on a single predictive model, the system stacks **many independently validated signals**, each implemented as its own **long–short sub-portfolio**, and aggregates them into a unified portfolio.
 
-The core design principle is **robust signal diversification**: each signal must be profitable on its own and remain stable across multiple validation tests before inclusion.
+The core philosophy is **signal diversification**:
+
+- every signal must work independently  
+- signals must generalize across datasets  
+- signals must remain stable when combined  
+
+This avoids dependence on any single alpha source and produces a **robust systematic portfolio**.
 
 ---
 
 # Strategy Overview
 
-The system builds a portfolio using **cross-sectional ETF signals** applied to a broad universe of global ETFs.
+The portfolio is constructed using **cross-sectional ETF signals** applied to a broad universe of global ETFs.
 
-Key characteristics:
+Key properties:
 
-- Multi-signal architecture
-- Cross-asset ETF universe
-- Long–short construction
-- Equal-weight signal aggregation
-- Extensive robustness validation
+- Multi-signal architecture  
+- Cross-asset ETF universe  
+- Long–short construction  
+- Equal-weight signal aggregation  
+- Extensive out-of-sample validation  
 
-Each signal forms an **independent long–short sub-portfolio**, which allows failures to be isolated and reduces dependence on any single alpha source.
+Each signal produces its own **long–short portfolio**, which is then aggregated into the final strategy.
 
 ---
 
 # ETF Universe
 
-The strategy operates on a large cross-section of **~230 ETFs**, spanning:
+The system operates on a **large cross-section of 232 ETFs**, spanning multiple asset classes:
 
-- Global equities
-- Sector ETFs
-- Fixed income
-- Commodities
-- Volatility proxies
-- Leveraged ETFs
-- International markets
+- global equities  
+- sector ETFs  
+- fixed income  
+- commodities  
+- volatility proxies  
+- leveraged ETFs  
+- international markets  
 
-Examples include: SPY, QQQ, EWJ, FXI, XLV, XLP, VNQ, GLD, GDX, SOXX, TLT, HYG, AGG, IWM, EEM, EWZ, ITB, VGT, XLE, XBI
+Example ETFs include:
 
+SPY, QQQ, EWJ, FXI, XLV, XLP, VNQ, GLD, GDX, SOXX, TLT, HYG, AGG, IWM, EEM, EWZ, ITB, VGT, XLE, XBI
 
-This broad universe provides **diversification across asset classes and geographies**, improving signal robustness.
+A large ETF universe improves:
 
----
-
-# Portfolio Construction
-
-The portfolio is constructed in **three layers**.
-
-## 1. Signal Construction
-
-Each signal generates a **cross-sectional ranking of ETFs**.
-
-Signals capture different market effects such as:
-
-- momentum persistence
-- volatility compression
-- price path efficiency
-- volume confirmation
-- liquidity persistence
-- return dispersion
-- entropy of price movement
-- autocorrelation structure
-
-Each signal is implemented as an **independent long–short portfolio**.
+- cross-sectional signal power  
+- diversification  
+- robustness across regimes  
 
 ---
 
-## 2. Signal Validation
+# Code Architecture
 
-Signals must pass strict criteria before inclusion.
+The project is structured into modular components.
 
-Requirements include:
+```
+Quanta-Portfolio/
 
-- Sharpe ≥ 1.0 in both **Train** and **Validation**
-- Consistent behavior across market regimes
-- Low correlation with existing signals
-- Robustness under transaction costs
-- Stability under leave-one-out tests
+run_portfolio.py
+portfolio_engine.py
+signals/
+    __init__.py
+    signal_*.py
+data_cache/
+README.md
+```
 
-Signals that fail these checks are excluded.
+## run_portfolio.py
+
+Main entry point for the system.
+
+Responsibilities:
+
+- CLI interface  
+- portfolio configuration  
+- ETF universe construction  
+- data loading  
+- running portfolio backtests  
+- computing performance metrics  
+- printing results  
 
 ---
 
-## 3. Portfolio Aggregation
+## portfolio_engine.py
 
-Validated signals are combined using: Equal-weight averaging of signal portfolios
+Core backtesting engine.
 
-This avoids overfitting and keeps the portfolio construction simple and robust.
+Handles:
 
-Each signal contributes equally to the final portfolio.
+- signal evaluation  
+- long/short portfolio construction  
+- leverage control  
+- daily PnL computation  
+- Sharpe / CAGR / drawdown metrics  
 
 ---
 
-# Portfolio Variants
+## signals/
 
-Two portfolio structures are maintained and evaluated.
+Contains **all signal implementations**.
 
-## 1. Market Neutral Portfolio (Primary)
+Signals are registered through:
 
-Long leverage = 1.0  
-Short leverage = 1.0
+```python
+_SIGNAL_REGISTRY
+```
 
-This configuration produces a **balanced long–short portfolio** designed to isolate pure alpha rather than market exposure.
+This allows the portfolio to dynamically map **signal names → signal functions**.
 
-### Performance
+---
+
+# Portfolio Configurations
+
+Two portfolio structures are implemented.
+
+---
+
+## 1. Market Neutral Portfolio (1.0x)
+
+Long leverage = **1.0**  
+Short leverage = **1.0**
+
+Configuration:
+
+- **19 signals**
+- **230 ETFs**
+
+Goal:
+
+Capture **pure alpha** with minimal market exposure.
+
+---
+
+## 2. Long-Biased Portfolio (1.5x)
+
+Long leverage = **1.5**  
+Short leverage = **1.0**
+
+Configuration:
+
+- **11 signals**
+- **142 ETFs**
+
+Goal:
+
+Combine signal alpha with **equity risk premium**.
+
+---
+
+## 3. Combined Portfolio
+
+The combined strategy equally weights both portfolios.
+
+```
+Combined = 0.5 × (1.0x portfolio)
+         + 0.5 × (1.5x portfolio)
+```
+
+Configuration:
+
+- **30 signals**
+- **232 ETFs**
+
+This increases diversification and improves robustness.
+
+---
+
+# Dataset Splits
+
+Performance is evaluated across multiple datasets.
+
+| Period | Range |
+|------|------|
+| Train | 2000-01-01 → 2015-12-31 |
+| Validation | 2016-01-01 → 2021-12-31 |
+| Blind | 2022-01-01 → 2025-06-30 |
+| Live OOS | 2026-01-01 → present |
+
+The **Live OOS period updates automatically** whenever the portfolio is run.
+
+---
+
+# Running the Portfolio
+
+The portfolio is executed from the command line.
+
+## Run Market Neutral Portfolio
+
+```bash
+python run_portfolio.py 1.0
+```
+
+Runs:
+
+- 19 signals  
+- 230 ETFs  
+- 1.0 / 1.0 leverage  
+
+---
+
+## Run Long-Biased Portfolio
+
+```bash
+python run_portfolio.py 1.5
+```
+
+Runs:
+
+- 11 signals  
+- 142 ETFs  
+- 1.5 / 1.0 leverage  
+
+---
+
+## Run Combined Portfolio
+
+```bash
+python run_portfolio.py combo
+```
+
+Runs:
+
+1. Market neutral portfolio  
+2. Long-biased portfolio  
+3. Combined portfolio  
+
+---
+
+## Force Reload ETF Data
+
+ETF data is cached locally.
+
+To force a full reload:
+
+```bash
+python run_portfolio.py combo --reload
+```
+
+---
+
+# ETF Data Caching
+
+ETF price data is cached locally to avoid repeated downloads.
+
+Example console output:
+
+```
+Loading ETF universe (232 ETFs) ...
+
+Loading ETF data...
+
+✓ Cache hits   (232): ['AAXJ', 'ACWX', 'AGG', 'AGQ', 'AIA']...
+```
+
+This means all ETF price data was loaded from cache instead of downloading again.
+
+---
+
+# Example Console Output
+
+```
+PS D:\Quanta-Portfolio> python run_portfolio.py combo
+```
+
+```
+======================================================================
+Cache reload: NO
+======================================================================
+
+Loading ETF universe (232 ETFs) ...
+
+Loading ETF data...
+
+✓ Cache hits   (232): ['AAXJ', 'ACWX', 'AGG', 'AGQ', 'AIA']...
+
+Running combined portfolio (1.0x + 1.5x equal weight)
+```
+
+---
+
+# Example Results (Early Live Period Illustration)
+
+The live out-of-sample period begins in **2026**.
+
+The results shown below are **only an early illustration using the first ~2 months of live data** and should **not be interpreted as long-term live performance**.
+
+As time progresses, the live statistics will automatically update when the portfolio is re-run.
+
+Example evaluation window:
+
+```
+2026-01-01 → 2026-03-01
+```
+
+Because this sample period is short, live Sharpe ratios and returns may fluctuate significantly.
+
+---
+
+# Market Neutral Portfolio (1.0x)
+
+Configuration:
+
+- 19 signals  
+- 230 ETFs  
 
 | Period | Sharpe |
 |------|------|
 | Train | 3.99 |
-| Validation | 3.99 |
-| Train + Val | 3.95 |
-| Blind (Out-of-Sample) | 2.74 |
+| Validation | 4.00 |
+| Blind | 2.74 |
+| Live (early sample) | 1.99 |
+| Full | 3.69 |
 
-Key observations:
+Example early live performance:
 
-- Extremely strong in-sample performance
-- Validation Sharpe nearly identical to training
-- Out-of-sample Sharpe remains very strong
-- Indicates **excellent generalization**
-
-This configuration serves as the **core strategy design**.
+```
+Absolute Return: 0.63%
+Final Equity:    1.0063
+```
 
 ---
 
-## 2. Long-Biased Portfolio
+# Long-Biased Portfolio (1.5x)
 
-Long leverage = 1.5  
-Short leverage = 1.0
+Configuration:
 
-This configuration introduces **net long exposure** while keeping the same signal architecture.
-
-The goal is to capture **equity risk premium** on top of the alpha generated by the signals.
-
-### Performance
+- 11 signals  
+- 142 ETFs  
 
 | Period | Sharpe |
 |------|------|
-| Train | 3.20 |
+| Train | 3.19 |
 | Validation | 2.98 |
-| Train + Val | 3.13 |
-| Blind (Out-of-Sample) | 2.05 |
+| Blind | 2.05 |
+| Live (early sample) | 4.08 |
+| Full | 2.94 |
 
-### Observations
+Example early live performance:
 
-- Strong performance in both training and validation periods
-- Out-of-sample Sharpe remains above **2.0**
-- Slightly lower risk-adjusted performance than the market-neutral version
-- Benefits from **equity market exposure during bullish regimes**
-
-This configuration may be attractive for **investors seeking both alpha and market exposure**.
-
----
-
-# Performance Comparison
-
-| Portfolio | Train | Validation | Train+Val | Blind |
-|------|------|------|------|------|
-| Market Neutral (1.0 / 1.0) | 3.99 | 3.99 | 3.95 | 2.74 |
-| Long-Biased (1.5 / 1.0) | 3.20 | 2.98 | 3.13 | 2.05 |
-
-### Key Takeaways
-
-**Market Neutral Portfolio**
-
-- Higher Sharpe across all datasets
-- Strongest out-of-sample performance
-- Pure alpha capture
-- Less dependent on market direction
-
-**Long-Biased Portfolio**
-
-- Slightly lower Sharpe due to market exposure
-- Still maintains strong out-of-sample performance
-- Captures additional upside during equity rallies
-
-Overall, the results suggest that the **signal architecture is robust**, performing well both with and without net market exposure.
+```
+Absolute Return: 5.21%
+Final Equity:    1.0521
+```
 
 ---
 
-# Performance Summary
+# Combined Portfolio
 
-## Market Neutral Portfolio (1.0 / 1.0)
+Configuration:
 
-This is the **main strategy configuration**.
+- 30 signals  
+- 232 ETFs  
 
 | Period | Sharpe |
 |------|------|
-| Train | 3.99 |
-| Validation | 3.99 |
-| Train + Val | 3.95 |
-| Blind (Out-of-Sample) | 2.74 |
+| Train | 3.89 |
+| Validation | 3.84 |
+| Blind | 2.54 |
+| Live (early sample) | 3.97 |
+| Full | 3.61 |
 
-Key observations:
+Example early live performance:
 
-- Performance remains **strong and consistent across splits**
-- Blind period confirms **good out-of-sample generalization**
-- Sharpe remains significantly higher than the benchmark
+```
+Absolute Return: 2.90%
+Final Equity:    1.0290
+```
+
+---
+
+# Important Note
+
+The **live out-of-sample period started in 2026**, so current results only reflect **a very short observation window**.
+
+These numbers are included purely as an **example of how the system reports live performance**, and will evolve as additional data accumulates.
+
+Longer live evaluation periods are necessary before drawing meaningful conclusions about real-world performance.
 
 ---
 
 # Signal Architecture
 
-The final portfolio contains **19 validated signals**, each running as an independent long–short sub-portfolio.
+Signals capture diverse market effects including:
 
-Examples include:
+- entropy of price movement  
+- volatility compression  
+- autocorrelation structure  
+- liquidity persistence  
+- price-volume interaction  
+- record rates  
+- burstiness  
+- path efficiency  
 
-- signal_1
-- signal_3
-- signal_8
-- signal_9
-- signal_entropy
-- signal_autocorr
-- signal_return_conviction
-- signal_vol_of_vol
-- signal_run_length
-- signal_liquidity_persistence
-- signal_signed_volume_agreement
-- signal_price_volume_phase
-- signal_vol_compression_ratio
-- signal_convexity_gap_adjusted
-- signal_time_since_volume_spike
-- signal_path_efficiency
-- signal_return_iqr
-- signal_record_rate
-- signal_burstiness
+Example signals:
 
-Each signal independently satisfies the validation criteria before inclusion.
+```
+signal_entropy
+signal_autocorr
+signal_burstiness
+signal_record_rate
+signal_vol_compression_ratio
+signal_return_conviction
+signal_price_volume_phase
+signal_liquidity_persistence
+signal_run_length
+signal_signed_volume_agreement
+```
 
----
-
-# Signal Robustness
-
-## Individual Signal Performance
-
-Each signal demonstrates **independent profitability** in both training and validation sets, with most signals achieving Sharpe values around **1.0–1.4** before aggregation.
-
-This ensures that portfolio performance does **not rely on a single dominant signal**.
+Each signal is validated individually before inclusion.
 
 ---
 
-## Leave-One-Out Stability
+# Signal Validation
 
-A leave-one-out analysis was performed by removing each signal individually and recomputing portfolio performance.
+Signals must pass strict criteria:
 
-Results show that:
+- Sharpe ≥ **1.0** in Train and Validation  
+- consistent performance across regimes  
+- low correlation with existing signals  
+- stability under leave-one-out testing  
+- robustness under transaction costs  
 
-- performance remains stable
-- no signal removal collapses returns
-- the portfolio is **not dependent on any single signal**
-
-This confirms **true diversification of alpha sources**.
-
----
-
-## Signal Correlation
-
-Signal correlations are generally **low to moderate**, with most pairwise correlations remaining well below **0.3**.
-
-Low correlation between signals ensures that:
-
-- signals capture different market effects
-- portfolio diversification is effective
-- risk concentration is minimized
+Signals failing these tests are excluded.
 
 ---
 
 # Execution Assumptions
 
-The strategy assumes **next-day execution**, meaning signals are computed using today's close and positions are executed at the next market open.
+Signals use **next-day execution**.
 
-This avoids look-ahead bias and ensures realistic tradability.
+Process:
 
-Transaction costs are included in robustness testing.
+1. Signals computed using today's close  
+2. Positions entered at next market open  
+
+This avoids **look-ahead bias** and reflects realistic trading.
 
 ---
 
 # Key Characteristics
 
-The strategy exhibits several desirable properties:
+The strategy exhibits:
 
-- diversified alpha sources
-- strong out-of-sample performance
-- low signal correlation
-- robustness to signal removal
-- large ETF universe
-- consistent behavior across market regimes
+- diversified alpha sources  
+- strong out-of-sample performance  
+- low signal correlation  
+- large ETF cross-section  
+- stability across market regimes  
 
-Most importantly, the results indicate that performance arises from **stacking many independent long–short signals**, rather than relying on leverage or a single predictive model.
-
----
-
-# Future Improvements
-
-Potential improvements include:
-
-- turnover reduction via signal smoothing
-- volatility-based signal weighting
-- correlation-aware portfolio weighting
-- dynamic capital allocation across signals
-- expansion of orthogonal signal families
+Performance arises from **stacking many independent signals**, not from leverage or a single predictive model.
 
 ---
 
 # Conclusion
 
-This project demonstrates that a **multi-signal long–short ETF portfolio** can generate strong and robust risk-adjusted returns when built with strict validation and diversification principles.
+This project demonstrates that **multi-signal long–short ETF portfolios** can generate strong and robust risk-adjusted returns when constructed with:
 
-The results suggest that:
+- strict signal validation  
+- large ETF universes  
+- diversified alpha sources  
+- disciplined out-of-sample testing  
 
-- diversified signal stacking is a powerful source of alpha
-- independent signal validation improves out-of-sample reliability
-- broad ETF universes enable robust cross-sectional strategies
-
-The market-neutral configuration shows particularly strong stability and remains the primary focus of the strategy.
+The **combined portfolio** shows particularly strong stability, delivering high Sharpe ratios historically and providing a framework for ongoing **live out-of-sample evaluation**.
