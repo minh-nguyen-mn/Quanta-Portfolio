@@ -38,7 +38,7 @@ def sharpe(returns, ann_factor=252):
         Annualized Sharpe ratio or NaN if insufficient data
     """
     returns = returns.dropna()
-    if returns.std() == 0 or len(returns) < 20:
+    if returns.std() == 0 or len(returns) < 10:
         return np.nan
     return np.sqrt(ann_factor) * returns.mean() / returns.std()
 

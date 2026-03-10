@@ -26,6 +26,11 @@ VAL_END = '2021-12-31'
 BLIND_START = '2022-01-01'
 BLIND_END = '2025-06-30'
 
+from datetime import datetime
+
+LIVE_START = "2026-01-01"
+LIVE_END = "2026-03-01"
+
 # Portfolio 1.0x Long: 19 signals, 230 ETFs
 SIGNAL_MAP_1_0X_STRINGS = {
     'signal_1': ['ROM', 'XLU', 'QQQ', 'SH', 'FDN', 'PCY', 'TNA', 'IYK', 'GRID', 'ITA', 'IDU', 'XOP', 'IGOV', 'BSV', 'CMF', 'HEDJ', 'IGV', 'PXH', 'IWD', 'MUNI', 'VMBS', 'SCZ', 'MDYV', 'DLS', 'BWX', 'PWV', 'RWL', 'SPHQ', 'FTCS', 'BIL'],
@@ -76,6 +81,113 @@ def convert_signal_map_strings_to_functions(signal_map_strings):
             print(f"Warning: Signal '{signal_name}' not found in registry")
     return signal_map
 
+def run_single_portfolio(leverage, signal_map_strings, price_data):
+
+    signal_map = convert_signal_map_strings_to_functions(signal_map_strings)
+
+    etf_universe = sorted({
+        etf for etf_list in signal_map_strings.values() for etf in etf_list
+    })
+
+    pnl_full, pos_full, ret_full, ind_pnl_full = run_period(
+        TRAIN_START,
+        LIVE_END,
+        price_data,
+        list(signal_map.keys()),
+        signal_map=signal_map,
+        etf_universe=etf_universe,
+        long_leverage=leverage,
+        short_leverage=1.0
+    )
+
+    return pnl_full
+
+def display_results(title, pnl_full, num_signals, num_etfs):
+
+    print(f"\n{'='*70}")
+    print(f"{title}")
+    print(f"{'='*70}")
+    print(f"Configuration: {num_signals} signals, {num_etfs} ETFs")
+    print(f"{'='*70}\n")
+
+    # ---------- PERIOD SPLITS ----------
+
+    pnl_train = pnl_full.loc[TRAIN_START:TRAIN_END]
+    pnl_val = pnl_full.loc[VAL_START:VAL_END]
+    pnl_blind = pnl_full.loc[BLIND_START:BLIND_END]
+    pnl_trainval = pnl_full.loc[TRAIN_START:VAL_END]
+    pnl_live = pnl_full.loc[pnl_full.index >= LIVE_START]
+
+    # ---------- METRICS ----------
+
+    train_sharpe = sharpe(pnl_train)
+    val_sharpe = sharpe(pnl_val)
+    blind_sharpe = sharpe(pnl_blind)
+    trainval_sharpe = sharpe(pnl_trainval)
+    full_sharpe = sharpe(pnl_full)
+    live_sharpe = sharpe(pnl_live)
+
+    train_cagr = cagr(pnl_train)
+    val_cagr = cagr(pnl_val)
+    blind_cagr = cagr(pnl_blind)
+    live_cagr = cagr(pnl_live)
+
+    train_mdd = max_drawdown(pnl_train)
+    val_mdd = max_drawdown(pnl_val)
+    blind_mdd = max_drawdown(pnl_blind)
+    live_mdd = max_drawdown(pnl_live)
+
+    print("RESULTS\n")
+
+    print(f"{'TRAIN PERIOD':30} ({TRAIN_START} to {TRAIN_END})")
+    print(f"  Sharpe Ratio:   {train_sharpe:>12.4f}")
+    print(f"  CAGR:           {train_cagr:>12.4f}")
+    print(f"  Max Drawdown:   {train_mdd:>12.4f}\n")
+
+    print(f"{'VALIDATION PERIOD':30} ({VAL_START} to {VAL_END})")
+    print(f"  Sharpe Ratio:   {val_sharpe:>12.4f}")
+    print(f"  CAGR:           {val_cagr:>12.4f}")
+    print(f"  Max Drawdown:   {val_mdd:>12.4f}\n")
+
+    print(f"{'BLIND PERIOD':30} ({BLIND_START} to {BLIND_END})")
+    print(f"  Sharpe Ratio:   {blind_sharpe:>12.4f}")
+    print(f"  CAGR:           {blind_cagr:>12.4f}")
+    print(f"  Max Drawdown:   {blind_mdd:>12.4f}\n")
+
+    print(f"{'LIVE OUT-OF-SAMPLE':30} ({LIVE_START} to {LIVE_END})")
+    print(f"  Sharpe Ratio:   {live_sharpe:>12.4f}")
+    print(f"  CAGR:           {live_cagr:>12.4f}")
+    print(f"  Max Drawdown:   {live_mdd:>12.4f}\n")
+
+    print(f"{'TRAIN + VALIDATION':30}")
+    print(f"  Sharpe Ratio:   {trainval_sharpe:>12.4f}\n")
+
+    print(f"{'FULL PERIOD':30}")
+    print(f"  Sharpe Ratio:   {full_sharpe:>12.4f}\n")
+
+    # ---------- EQUITY ----------
+
+    equity_full = (1 + pnl_full).cumprod()
+    equity_live = (1 + pnl_live).cumprod()
+
+    absolute_return = equity_live.iloc[-1] - 1
+    final_equity = equity_live.iloc[-1]
+
+    total_return = equity_full.iloc[-1] - 1
+    equity_high = equity_full.cummax().iloc[-1]
+
+    final_dd = (equity_full.iloc[-1] - equity_high) / equity_high if equity_high > 0 else 0
+
+    print(f"{'LIVE RETURN':30}")
+    print(f"  Absolute Return: {absolute_return:>12.4f}")
+    print(f"  Final Equity:    {final_equity:>12.4f}\n")
+
+    print("SUMMARY")
+    print(f"  Signals Used:    {num_signals}")
+    print(f"  ETFs Used:       {num_etfs}")
+    print(f"  Total Return:    {total_return:>12.4f}")
+    print(f"  Final Drawdown:  {final_dd:>12.4f}")
+    print()
 
 def main():
     """Main entry point for portfolio backtest."""
@@ -83,147 +195,127 @@ def main():
     # Parse command-line argument
     if len(sys.argv) < 2:
         print("Usage: python run_portfolio.py <leverage>  [--reload]")
-        print("  <leverage>: 1.0 or 1.5")
+        print("  <leverage>: 1.0 or 1.5 or combo")
         print("  --reload : force reload all ETF data (ignore cache)")
         print("\nExample:")
         print("  python run_portfolio.py 1.0   # Run 1.0x leverage (19 signals, 230 ETFs)")
         print("  python run_portfolio.py 1.5   # Run 1.5x leverage (11 signals, 142 ETFs)")
+        print("  python run_portfolio.py combo # Run combo")
         sys.exit(1)
     
-    leverage_str = sys.argv[1]
+    leverage_str  = sys.argv[1]
     force_reload = "--reload" in sys.argv
     
-    # Validate leverage argument
-    try:
-        leverage = float(leverage_str)
-    except ValueError:
-        print(f"Error: Leverage must be a number, got '{leverage_str}'")
+    if leverage_str not in ["1.0", "1.5", "combo"]:
+        print("Error: leverage must be 1.0, 1.5, or combo")
         sys.exit(1)
-    
-    if leverage not in [1.0, 1.5]:
-        print(f"Error: Leverage must be 1.0 or 1.5, got {leverage}")
-        sys.exit(1)
-    
-    # Select portfolio-specific configuration
-    if leverage == 1.0:
-        signal_map_strings = SIGNAL_MAP_1_0X_STRINGS
-        num_signals = 19
-        num_etfs = 230
-    else:  # leverage == 1.5
-        signal_map_strings = SIGNAL_MAP_1_5X_STRINGS
-        num_signals = 11
-        num_etfs = 142
     
     print(f"\n{'='*70}")
-    print(f"Portfolio Backtest: {leverage:.1f}x Long, 1.0x Short Leverage")
-    print(f"{'='*70}")
-    print(f"Configuration: {num_signals} signals, {num_etfs} ETFs")
+    print(f"Cache reload: {'YES' if force_reload else 'NO'}")
     print(f"{'='*70}\n")
 
-    print(f"Cache reload: {'YES' if force_reload else 'NO'}\n")
+    # ---------- PORTFOLIO CONFIG ----------
 
-    # Convert signal map strings to functions
-    print(f"Loading signal registry...")
-    signal_map = convert_signal_map_strings_to_functions(signal_map_strings)
-    print(f"Loaded {len(signal_map)} signal functions.\n")
-    
-    # Build ETF universe from signal map
-    etf_universe = sorted({etf for etf_list in signal_map_strings.values() for etf in etf_list})
-    print(f"ETF Universe: {len(etf_universe)} ETFs\n")
-    
-    print(f"Loading price data for {len(etf_universe)} ETFs...")
+    portfolios = {
+        "1.0": {
+            "leverage": 1.0,
+            "signals": SIGNAL_MAP_1_0X_STRINGS
+        },
+        "1.5": {
+            "leverage": 1.5,
+            "signals": SIGNAL_MAP_1_5X_STRINGS
+        }
+    }
+
+    # ---------- BUILD UNION ETF UNIVERSE ----------
+
+    all_etfs = sorted({
+        etf
+        for config in portfolios.values()
+        for etf_list in config["signals"].values()
+        for etf in etf_list
+    })
+
+    print(f"Loading ETF universe ({len(all_etfs)} ETFs) ...")
+
     price_data = load_price_data(
-        etf_universe,
+        all_etfs,
         POLYGON_API_KEY,
         force_reload=force_reload
     )
-    print(f"Data loaded successfully.\n")
-    
-    print(f"Running backtest...")
-    print(f"  Period: {TRAIN_START} to {BLIND_END}")
-    print(f"  Long Leverage: {leverage:.1f}x")
-    print(f"  Short Leverage: 1.0x\n")
-    
-    # Run backtest with portfolio-specific signal map
-    pnl_full, pos_full, ret_full, ind_pnl_full = run_period(
-        TRAIN_START,
-        BLIND_END,
-        price_data,
-        list(signal_map.keys()),  # Signal functions list (not used in Mode 3)
-        signal_map=signal_map,    # Signal-to-ETF mapping (Mode 3)
-        etf_universe=etf_universe,
-        long_leverage=leverage,
-        short_leverage=1.0
+
+    # ---------- SINGLE PORTFOLIO ----------
+
+    if leverage_str in portfolios:
+
+        config = portfolios[leverage_str]
+
+        pnl = run_single_portfolio(
+            config["leverage"],
+            config["signals"],
+            price_data
+        )
+
+        etfs = {e for v in config["signals"].values() for e in v}
+
+        display_results(
+            f"PORTFOLIO {leverage_str}x",
+            pnl,
+            len(config["signals"]),
+            len(etfs)
+        )
+
+        return 0
+
+    # ---------- COMBO MODE ----------
+
+    print("Running combined portfolio (1.0x + 1.5x equal weight)\n")
+
+    results = {}
+
+    for name, config in portfolios.items():
+
+        pnl = run_single_portfolio(
+            config["leverage"],
+            config["signals"],
+            price_data
+        )
+
+        etfs = {e for v in config["signals"].values() for e in v}
+
+        results[name] = {
+            "pnl": pnl,
+            "signals": len(config["signals"]),
+            "etfs": len(etfs),
+            "etf_set": etfs
+        }
+
+        display_results(
+            f"PORTFOLIO {name}x",
+            pnl,
+            len(config["signals"]),
+            len(etfs)
+        )
+
+    # ---------- COMBINE ----------
+
+    pnl1 = results["1.0"]["pnl"]
+    pnl15 = results["1.5"]["pnl"]
+
+    idx = pnl1.index.intersection(pnl15.index)
+
+    pnl_combo = 0.5 * pnl1.loc[idx] + 0.5 * pnl15.loc[idx]
+
+    combo_signals = results["1.0"]["signals"] + results["1.5"]["signals"]
+    combo_etfs = len(results["1.0"]["etf_set"] | results["1.5"]["etf_set"])
+
+    display_results(
+        "COMBINED PORTFOLIO (1.0x + 1.5x)",
+        pnl_combo,
+        combo_signals,
+        combo_etfs
     )
-    
-    print("Backtest completed. Calculating metrics...\n")
-    
-    # Extract periods
-    pnl_train = pnl_full.loc[TRAIN_START:TRAIN_END]
-    pnl_val = pnl_full.loc[VAL_START:VAL_END]
-    pnl_blind = pnl_full.loc[BLIND_START:BLIND_END]
-    pnl_trainval = pnl_full.loc[TRAIN_START:VAL_END]
-    
-    # Calculate metrics
-    train_sharpe = sharpe(pnl_train)
-    val_sharpe = sharpe(pnl_val)
-    blind_sharpe = sharpe(pnl_blind)
-    trainval_sharpe = sharpe(pnl_trainval)
-    full_sharpe = sharpe(pnl_full)
-    
-    train_cagr = cagr(pnl_train)
-    val_cagr = cagr(pnl_val)
-    blind_cagr = cagr(pnl_blind)
-    
-    train_mdd = max_drawdown(pnl_train)
-    val_mdd = max_drawdown(pnl_val)
-    blind_mdd = max_drawdown(pnl_blind)
-    
-    # Display results
-    print(f"{'='*70}")
-    print(f"RESULTS — {leverage:.1f}x Leverage Portfolio")
-    print(f"{'='*70}\n")
-    
-    print(f"{'TRAIN PERIOD':30} ({TRAIN_START} to {TRAIN_END})")
-    print(f"  Sharpe Ratio:   {train_sharpe:>12.4f}")
-    print(f"  CAGR:           {train_cagr:>12.4f}")
-    print(f"  Max Drawdown:   {train_mdd:>12.4f}\n")
-    
-    print(f"{'VALIDATION PERIOD':30} ({VAL_START} to {VAL_END})")
-    print(f"  Sharpe Ratio:   {val_sharpe:>12.4f}")
-    print(f"  CAGR:           {val_cagr:>12.4f}")
-    print(f"  Max Drawdown:   {val_mdd:>12.4f}\n")
-    
-    print(f"{'BLIND PERIOD':30} ({BLIND_START} to {BLIND_END})")
-    print(f"  Sharpe Ratio:   {blind_sharpe:>12.4f}")
-    print(f"  CAGR:           {blind_cagr:>12.4f}")
-    print(f"  Max Drawdown:   {blind_mdd:>12.4f}\n")
-    
-    print(f"{'TRAIN + VALIDATION':30}")
-    print(f"  Sharpe Ratio:   {trainval_sharpe:>12.4f}\n")
-    
-    print(f"{'FULL PERIOD':30}")
-    print(f"  Sharpe Ratio:   {full_sharpe:>12.4f}\n")
-    
-    # Summary stats
-    total_return = pnl_full.iloc[-1]
-    equity_high = pnl_full.cummax().iloc[-1]
-    if equity_high > 0:
-        final_dd = (pnl_full.iloc[-1] - equity_high) / equity_high
-    else:
-        final_dd = 0
-    
-    print(f"{'='*70}")
-    print(f"SUMMARY")
-    print(f"{'='*70}")
-    print(f"  Signals Used:         {len(signal_map):>12} (portfolio-specific)")
-    print(f"  ETFs Used:            {len(etf_universe):>12} (portfolio-specific)")
-    print(f"  Total Return:         {total_return:>12.4f} (${total_return:,.0f})")
-    print(f"  Final Drawdown:       {final_dd:>12.4f}")
-    print(f"  Backtesting Period:   {TRAIN_START} to {BLIND_END}")
-    print(f"{'='*70}\n")
-    
-    # Return success
+
     return 0
 
 
