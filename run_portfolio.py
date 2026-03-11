@@ -189,6 +189,49 @@ def display_results(title, pnl_full, num_signals, num_etfs):
     print(f"  Final Drawdown:  {final_dd:>12.4f}")
     print()
 
+def display_correlation_matrices(pnl1, pnl15, pnl_combo):
+    """Display correlation matrices for each reporting period."""
+
+    periods = {
+        "TRAIN": (TRAIN_START, TRAIN_END),
+        "VALIDATION": (VAL_START, VAL_END),
+        "BLIND": (BLIND_START, BLIND_END),
+        "LIVE": (LIVE_START, LIVE_END),
+        "TRAIN + VALIDATION": (TRAIN_START, VAL_END),
+        "FULL": (None, None)
+    }
+
+    print("\n" + "="*70)
+    print("PORTFOLIO CORRELATION MATRICES")
+    print("="*70)
+
+    for name, (start, end) in periods.items():
+
+        if start is None:
+            df = pd.concat(
+                {
+                    "Portfolio_1.0x": pnl1,
+                    "Portfolio_1.5x": pnl15,
+                    "Combo": pnl_combo
+                },
+                axis=1
+            )
+        else:
+            df = pd.concat(
+                {
+                    "Portfolio_1.0x": pnl1.loc[start:end],
+                    "Portfolio_1.5x": pnl15.loc[start:end],
+                    "Combo": pnl_combo.loc[start:end]
+                },
+                axis=1
+            )
+
+        corr = df.corr()
+
+        print(f"\n{name} PERIOD CORRELATION")
+        print("-"*70)
+        print(corr.round(3))
+
 def main():
     """Main entry point for portfolio backtest."""
     
@@ -315,7 +358,8 @@ def main():
         combo_signals,
         combo_etfs
     )
-
+    display_correlation_matrices(pnl1, pnl15, pnl_combo)
+    
     return 0
 
 
