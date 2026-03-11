@@ -409,6 +409,19 @@ def load_price_data(trading_universe, api_key, force_reload=False):
         • Safe to rerun cells
         • SPY always included
     """
+    # ----- HARD RELOAD -----
+    if force_reload:
+        print("Clearing session cache...")
+        _ETF_CACHE.clear()
+
+        print("Clearing disk cache...")
+        for f in os.listdir(CACHE_DIR):
+            if f.endswith(".pkl"):
+                try:
+                    os.remove(os.path.join(CACHE_DIR, f))
+                except Exception:
+                    pass
+                
     required = sorted(set(trading_universe) | {"SPY"})
     data = {}
     hits = []
