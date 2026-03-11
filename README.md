@@ -13,7 +13,7 @@ The system supports running multiple portfolios individually or in combination w
 - Local data caching (avoids repeated downloads)
 - Train / Validation / Blind / Live evaluation splits
 - Portfolio-level and combined portfolio backtests
-- PnL correlation matrices
+- Portfolio correlation matrices across all evaluation periods
 - Configurable leverage
 - Reproducible CLI execution
 
@@ -35,6 +35,8 @@ Each portfolio has its own:
 - ETF universe
 - leverage configuration
 
+The combined portfolio runs both portfolios independently and then constructs an equal-weight allocation of their daily returns.
+
 ---
 
 # Data Periods
@@ -47,6 +49,11 @@ The backtest uses the following dataset splits:
 | Validation | 2016-01-01 → 2021-12-31 | Out-of-sample testing |
 | Blind | 2022-01-01 → 2025-06-30 | Unseen historical data |
 | Live | 2026-01-01 → present | Real forward period |
+
+Additional summary statistics are also computed for:
+
+- **Train + Validation**
+- **Full Period**
 
 **Important**
 
@@ -92,11 +99,11 @@ python run_portfolio.py 1.5
 python run_portfolio.py combo
 ```
 
-This runs:
+This executes:
 
-- Portfolio 1.0
-- Portfolio 1.5
-- Equal-weight combination
+1. Portfolio 1.0  
+2. Portfolio 1.5  
+3. Equal-weight combination of both portfolios  
 
 ---
 
@@ -120,7 +127,7 @@ When the program runs:
 ### Force Reload Cache
 
 ```
-python run_portfolio.py combo --clear-cache
+python run_portfolio.py combo --reload
 ```
 
 This deletes cached files and downloads fresh data.
@@ -150,6 +157,64 @@ Meaning:
 
 - Portfolio gained **5.21%**
 - $1 → **$1.0521**
+
+---
+
+# Correlation Analysis
+
+When running the **combined portfolio**, the framework also reports **correlation matrices between portfolios** across all evaluation periods.
+
+These matrices help measure **diversification between strategies**.
+
+Example:
+
+```
+PORTFOLIO CORRELATION MATRICES
+
+TRAIN PERIOD CORRELATION
+----------------------------------------------------------------------
+                Portfolio_1.0x  Portfolio_1.5x  Combo
+Portfolio_1.0x           1.000           0.565  0.804
+Portfolio_1.5x           0.565           1.000  0.945
+Combo                    0.804           0.945  1.000
+
+VALIDATION PERIOD CORRELATION
+----------------------------------------------------------------------
+                Portfolio_1.0x  Portfolio_1.5x  Combo
+Portfolio_1.0x           1.000           0.381  0.669
+Portfolio_1.5x           0.381           1.000  0.942
+Combo                    0.669           0.942  1.000
+
+BLIND PERIOD CORRELATION
+----------------------------------------------------------------------
+                Portfolio_1.0x  Portfolio_1.5x  Combo
+Portfolio_1.0x           1.000           0.444  0.676
+Portfolio_1.5x           0.444           1.000  0.960
+Combo                    0.676           0.960  1.000
+
+LIVE PERIOD CORRELATION
+----------------------------------------------------------------------
+                Portfolio_1.0x  Portfolio_1.5x  Combo
+Portfolio_1.0x           1.000           0.544  0.688
+Portfolio_1.5x           0.544           1.000  0.983
+Combo                    0.688           0.983  1.000
+
+TRAIN + VALIDATION PERIOD CORRELATION
+----------------------------------------------------------------------
+                Portfolio_1.0x  Portfolio_1.5x  Combo
+Portfolio_1.0x           1.000           0.521  0.776
+Portfolio_1.5x           0.521           1.000  0.943
+Combo                    0.776           0.943  1.000
+
+FULL PERIOD CORRELATION
+----------------------------------------------------------------------
+                Portfolio_1.0x  Portfolio_1.5x  Combo
+Portfolio_1.0x           1.000           0.511  0.764
+Portfolio_1.5x           0.511           1.000  0.945
+Combo                    0.764           0.945  1.000
+```
+
+Lower correlations between component portfolios indicate **stronger diversification benefits**.
 
 ---
 
@@ -318,6 +383,7 @@ SUMMARY
 
 - PnL values represent **daily portfolio returns**.
 - Total return is the **equity multiple minus 1** over the full backtest period.
+- Portfolio correlation matrices are computed from daily returns.
 - Live performance will evolve as more real data becomes available.
 
 ---
