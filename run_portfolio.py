@@ -102,6 +102,71 @@ def run_single_portfolio(leverage, signal_map_strings, price_data):
 
     return pnl_full
 
+def combine_risk_parity_rolling(pnl1, pnl2, window=252):
+
+    df = pd.concat([pnl1, pnl2], axis=1)
+    df.columns = ["p1", "p2"]
+
+    # rolling vol from past data
+    rolling_vol = df.rolling(window).std()
+
+    # inverse volatility weights
+    weights = 1 / rolling_vol
+    weights = weights.div(weights.sum(axis=1), axis=0)
+
+    # allocation decided yesterday
+    weights = weights.shift(1)
+
+    # handle first window period with equal weights
+    weights = weights.fillna(0.5)
+
+    combo = (weights * df).sum(axis=1)
+
+    return combo
+
+def combine_minvar_rolling(pnl1, pnl2, window=252):
+
+    df = pd.concat([pnl1, pnl2], axis=1)
+    df.columns = ["p1", "p2"]
+
+    weights = []
+
+    for i in range(len(df)):
+
+        # not enough history → equal weight
+        if i < window:
+            weights.append([0.5, 0.5])
+            continue
+
+        hist = df.iloc[i-window:i]   # strictly past data
+
+        cov = hist.cov().values
+
+        try:
+            inv_cov = np.linalg.inv(cov)
+        except np.linalg.LinAlgError:
+            weights.append([0.5, 0.5])
+            continue
+
+        ones = np.ones(2)
+
+        w = inv_cov @ ones
+        w = w / (ones @ inv_cov @ ones)
+
+        weights.append(w)
+
+    weights = pd.DataFrame(weights, index=df.index, columns=df.columns)
+
+    # allocation decided yesterday
+    weights = weights.shift(1)
+
+    # ensure first rows valid
+    weights = weights.fillna(0.5)
+
+    combo = (weights * df).sum(axis=1)
+
+    return combo
+
 def display_results(title, pnl_full, num_signals, num_etfs):
 
     print(f"\n{'='*70}")
@@ -237,20 +302,41 @@ def main():
     
     # Parse command-line argument
     if len(sys.argv) < 2:
-        print("Usage: python run_portfolio.py <leverage>  [--reload]")
-        print("  <leverage>: 1.0 or 1.5 or combo")
-        print("  --reload : force reload all ETF data (ignore cache)")
+        print("Usage: python run_portfolio.py <mode> [--reload]")
+        print("")
+        print("Modes:")
+        print("  1.0")
+        print("  1.5")
+        print("  combo-equal")
+        print("  combo-risk")
+        print("  combo-minvar")
+        print("  --reload : force reload all ETF data (delete cache)")
         print("\nExample:")
-        print("  python run_portfolio.py 1.0   # Run 1.0x leverage (19 signals, 230 ETFs)")
-        print("  python run_portfolio.py 1.5   # Run 1.5x leverage (11 signals, 142 ETFs)")
-        print("  python run_portfolio.py combo # Run combo")
+        print("  python run_portfolio.py 1.0         # Run 1.0x leverage (19 signals, 230 ETFs)")
+        print("  python run_portfolio.py 1.5         # Run 1.5x leverage (11 signals, 142 ETFs)")
+        print("  python run_portfolio.py combo-equal # Run combo")
+
         sys.exit(1)
     
-    leverage_str  = sys.argv[1]
+    mode  = sys.argv[1]
     force_reload = "--reload" in sys.argv
     
-    if leverage_str not in ["1.0", "1.5", "combo"]:
-        print("Error: leverage must be 1.0, 1.5, or combo")
+    combo_method = None
+
+    if mode.startswith("combo"):
+        parts = mode.split("-")
+
+        if len(parts) == 1:
+            combo_method = "risk"
+        else:
+            combo_method = parts[1]
+
+        if combo_method not in ["equal", "risk", "minvar"]:
+            print("Error: combo must be combo-equal, combo-risk, or combo-minvar")
+            sys.exit(1)
+
+    elif mode not in ["1.0", "1.5"]:
+        print("Error: mode must be 1.0, 1.5, combo-equal, combo-risk, or combo-minvar")
         sys.exit(1)
     
     print(f"\n{'='*70}")
@@ -289,9 +375,9 @@ def main():
 
     # ---------- SINGLE PORTFOLIO ----------
 
-    if leverage_str in portfolios:
+    if mode in portfolios:
 
-        config = portfolios[leverage_str]
+        config = portfolios[mode]
 
         pnl = run_single_portfolio(
             config["leverage"],
@@ -312,7 +398,7 @@ def main():
 
     # ---------- COMBO MODE ----------
 
-    print("Running combined portfolio (1.0x + 1.5x equal weight)\n")
+    print(f"Running combined portfolio using {combo_method.upper()} method\n")
 
     results = {}
 
@@ -347,7 +433,20 @@ def main():
 
     idx = pnl1.index.intersection(pnl15.index)
 
-    pnl_combo = 0.5 * pnl1.loc[idx] + 0.5 * pnl15.loc[idx]
+    p1 = pnl1.loc[idx]
+    p2 = pnl15.loc[idx]
+
+    if combo_method == "equal":
+
+        pnl_combo = 0.5 * p1 + 0.5 * p2
+
+    elif combo_method == "risk":
+
+        pnl_combo = combine_risk_parity_rolling(p1, p2)
+
+    elif combo_method == "minvar":
+
+        pnl_combo = combine_minvar_rolling(p1, p2)
 
     combo_signals = results["1.0"]["signals"] + results["1.5"]["signals"]
     combo_etfs = len(results["1.0"]["etf_set"] | results["1.5"]["etf_set"])
