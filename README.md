@@ -96,14 +96,16 @@ python run_portfolio.py 1.5
 ## Run Combined Portfolio
 
 ```
-python run_portfolio.py combo
+python run_portfolio.py combo-equal
+python run_portfolio.py combo-risk
+python run_portfolio.py combo-minvar
 ```
 
 This executes:
 
 1. Portfolio 1.0  
 2. Portfolio 1.5  
-3. Equal-weight combination of both portfolios  
+3. Combination of both portfolios  
 
 ---
 
@@ -127,7 +129,7 @@ When the program runs:
 ### Force Reload Cache
 
 ```
-python run_portfolio.py combo --reload
+python run_portfolio.py combo-equal --reload
 ```
 
 This deletes cached files and downloads fresh data.
@@ -223,7 +225,7 @@ Lower correlations between component portfolios indicate **stronger diversificat
 Example command:
 
 ```
-python run_portfolio.py combo
+python run_portfolio.py combo-equal
 ```
 
 Example output:
