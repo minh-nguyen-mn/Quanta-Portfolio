@@ -17,7 +17,15 @@ from portfolio_engine import load_price_data, run_period, sharpe, cagr, max_draw
 
 
 # Configuration
-POLYGON_API_KEY = 'REMOVED_API_KEY'
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+POLYGON_API_KEY = os.getenv("POLYGON_API_KEY")
+
+if not POLYGON_API_KEY:
+    raise ValueError("POLYGON_API_KEY environment variable not set")
 
 TRAIN_START = '2000-01-01'
 TRAIN_END = '2015-12-31'
