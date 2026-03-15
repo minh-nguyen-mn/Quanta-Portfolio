@@ -27,7 +27,7 @@ The framework currently supports three portfolio modes:
 |-----|-------------|
 | `1.0` | Base portfolio |
 | `1.5` | Higher leverage portfolio |
-| `combo` | Equal-weight combination of 1.0 and 1.5 portfolios |
+| `combo-<mode>` | Combination of portfolios |
 
 Each portfolio has its own:
 
